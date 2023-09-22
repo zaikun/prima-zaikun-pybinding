@@ -3,6 +3,7 @@ from prima.common.consts import INFO_DEFAULT, REALMAX, EPS, CONSTRMAX, \
                     MAXTR_REACHED, DAMAGING_ROUNDING, SMALL_TR_RADIUS, \
                     NAN_INF_X, NAN_INF_F, FTARGET_ACHIEVED, MAXFUN_REACHED
 from prima.common.evaluate import evaluate, moderatec, moderatef
+from prima.common.checkbreak import checkbreak_con
 from prima.cobyla.update import updatepole, findpole, updatexfc
 from prima.cobyla.geometry import assess_geo, setdrop_tr, geostep, setdrop_geo
 from prima.common.selectx import savefilt , selectx
@@ -47,36 +48,33 @@ def redrho(rho, rhoend):
     
     return rho
 
-def checkbreak(maxfun, nf, cstrv, ctol, f, ftarget, x):
-    '''
-        This function checks whether to break the solver in constrained cases.
-    '''
-    info = INFO_DEFAULT
-
-    # Although X should not contain NaN unless there is a bug, we include the following for security.
-    # X can be inf, as finite + finite can be inf numerically.
-    if any(np.isnan(x)) or any(np.isinf(x)):
-        info = NAN_INF_X
-
-    # Although NAN_INF_F should not happen unless there is a bug, we include the following for security.
-    if np.isnan(f) or np.isposinf(f) or np.isnan(cstrv) or np.isposinf(cstrv):
-        info = NAN_INF_F
-    
-    if cstrv <= ctol and f <= ftarget:
-        info = FTARGET_ACHIEVED
-
-    if nf >= maxfun:
-        info = MAXFUN_REACHED
-    return info
 
 def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0,
-    conmat, cval, fval):
+    conmat, cval, srname):
     '''
     This subroutine does the initialization concerning X, function values, and constraints.
     '''
 
+    # Sizes
     num_constraints = conmat.shape[0]
     num_vars = x0.size
+
+    # Preconditions
+    assert num_constraints >= 0, f'M >= 0 {srname}'
+    assert num_vars >= 1, f'N >= 1 {srname}'
+    assert abs(iprint) <= 3, f'IPRINT is 0, 1, -1, 2, -2, 3, or -3 {srname}'
+    assert conmat.shape == (num_constraints , num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
+    assert cval.size == num_vars + 1, f'CVAL.size == N+1 {srname}'
+    # assert maxchist * (maxchist - maxhist) == 0, f'CHIST.shape == 0 or MAXHIST {srname}'
+    # assert conhist.shape[0] == num_constraints and maxconhist * (maxconhist - maxhist) == 0, 'CONHIST.shape[0] == num_constraints, SIZE(CONHIST, 2) == 0 or MAXHIST {srname)}'
+    # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
+    # assert xhist.shape[0] == num_vars and maxxhist * (maxxhist - maxhist) == 0, 'XHIST.shape[0] == N, SIZE(XHIST, 2) == 0 or MAXHIST {srname)}'
+    assert all(np.isfinite(x0)), f'X0 is finite {srname}'
+    assert rhobeg > 0, f'RHOBEG > 0 {srname}'
+
+    #====================#
+    # Calculation starts #
+    #====================#
 
     # Initialize info to the default value. At return, a value different from this value will
     # indicate an abnormal return
@@ -84,13 +82,13 @@ def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0,
 
     # Initialize the simplex. It will be revised during the initialization.
     sim = np.eye(num_vars, num_vars+1) * rhobeg
-    sim[:, -1] = x0
+    sim[:, num_vars] = x0
 
     # evaluated[j] = True iff the function/constraint of SIM[:, j] has been evaluated.
     evaluated = np.zeros(num_vars+1, dtype=bool)
 
-    # Here the FORTRAN code initializes some history values, but apparently only for the benefit of compilers,
-    # so we skip it.
+    # Initialize fval
+    fval = np.zeros(num_vars+1) + REALMAX
 
     for k in range(num_vars + 1):
         x = sim[:, num_vars].copy()
@@ -99,7 +97,7 @@ def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0,
             j = num_vars
             f = moderatef(f0)
             constr = moderatec(constr0)
-            cstrv = max(max(-constr), 0)
+            cstrv = np.max(np.append(-constr, 0))
         else:
             j = k - 1
             x[j] += rhobeg
@@ -120,10 +118,10 @@ def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0,
         cval[j] = cstrv
 
         # Check whether to exit.
-        # subinfo = checkexit(maxfun, k, cstrv, ctol, f, ftarget, x)
-        # if subinfo != INFO_DEFAULT:
-        #     info = subinfo
-        #     break
+        subinfo = checkbreak_con(maxfun, k, cstrv, ctol, f, ftarget, x)
+        if subinfo != INFO_DEFAULT:
+            info = subinfo
+            break
 
         # Exchange the new vertex of the initial simplex with the optimal vertex if necessary.
         # This is the ONLY part that is essentially non-parallel.
@@ -132,15 +130,38 @@ def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0,
             cval[j], cval[num_vars] = cval[num_vars], cval[j]
             conmat[:, [j, num_vars]] = conmat[:, [num_vars, j]]
             sim[:, num_vars] = x
-            sim[j, :j+1] = -rhobeg
+            sim[j, :j+1] = -rhobeg  # SIM[:, :j+1] is lower triangular
 
     nf = np.count_nonzero(evaluated)
 
     if evaluated.all():
         # Initialize SIMI to the inverse of SIM[:, :num_vars]
         simi = np.linalg.inv(sim[:, :num_vars])
+
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    assert nf <= maxfun, f'NF <= MAXFUN {srname}'
+    assert evaluated.size == num_vars + 1, f'EVALUATED.size == Num_vars + 1 {srname}'
+    # assert chist.size == maxchist, f'CHIST.size == MAXCHIST {srname}'
+    # assert conhist.shape== (num_constraints, maxconhist), f'CONHIST.shape == [M, MAXCONHIST] {srname}'
+    assert conmat.shape == (num_constraints, num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
+    assert not (np.isnan(conmat).any() or np.isneginf(conmat).any()), f'CONMAT does not contain NaN/-Inf {srname}'
+    assert cval.size == num_vars + 1 and not (any(cval < 0) or any(np.isnan(cval)) or any(np.isposinf(cval))), f'CVAL.shape == Num_vars+1 and CVAL does not contain negative values or NaN/+Inf {srname}'
+    # assert fhist.shape == maxfhist, f'FHIST.shape == MAXFHIST {srname}'
+    # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
+    assert fval.size == num_vars + 1 and not (any(np.isnan(fval)) or any(np.isposinf(fval))), f'FVAL.shape == Num_vars+1 and FVAL is not NaN/+Inf {srname}'
+    # assert xhist.shape == (num_vars, maxxhist), f'XHIST.shape == [N, MAXXHIST] {srname}'
+    assert sim.shape == (num_vars, num_vars + 1), f'SIM.shape == [N, N+1] {srname}'
+    assert np.isfinite(sim).all(), f'SIM is finite {srname}'
+    assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0), f'SIM(:, 1:N) has no zero column {srname}'
+    assert simi.shape == (num_vars, num_vars), f'SIMI.shape == [N, N] {srname}'
+    assert np.isfinite(simi).all(), f'SIMI is finite {srname}'
+    assert np.allclose(sim[:, :num_vars] @ simi, np.eye(num_vars), rtol=0.1, atol=0.1) or not all(evaluated), f'SIMI = SIM(:, 1:N)^{-1} {srname}'
     
-    return evaluated, sim, simi, nf, info
+    return evaluated, sim, simi, fval, nf, info
 
 
 def initfilt(conmat, ctol, cweight, cval, fval, sim, evaluated, cfilt, confilt, ffilt, xfilt):
@@ -225,11 +246,10 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     # maxhist = max(maxxhist, maxfhist, maxconhist, maxchist)
     conmat = np.zeros((num_constraints, num_vars+1)) - REALMAX
     cval = np.zeros(num_vars+1) + REALMAX
-    fval = np.zeros(num_vars+1) + REALMAX
     
     subinfo = 0
-    evaluated, sim, simi, nf, subinfo = initxfc(calcfc, iprint, maxfun, constr, ctol, f, ftarget, rhobeg, x,
-      conmat, cval, fval)
+    evaluated, sim, simi, fval, nf, subinfo = initxfc(calcfc, iprint, maxfun, constr, ctol, f, ftarget, rhobeg, x,
+      conmat, cval, srname="COBYLA")
     # TODO: Need to initialize history with f and x and constr
     
     # Initialize the filter, including xfilt, ffilt, confiolt, cfilt, and nfilt.
@@ -362,14 +382,14 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
 
         # Predict the change to F (PREREF) and to the constraint violation (PREREC) due to D.
         # We have the following in precise arithmetic. They may fail to hold due to rounding errors.
-        # 1. B[:NUM_CONSTRAINTS] = -CONMAT[:, NUM_VARS] and hence max(max(B[:NUM_CONSTRAINTS] - D@A[:, :NUM_CONSTRAINTS]), 0) is the
+        # 1. B[:NUM_CONSTRAINTS] = -CONMAT[:, NUM_VARS] and hence np.max(np.append(B[:NUM_CONSTRAINTS] - D@A[:, :NUM_CONSTRAINTS], 0)) is the
         # L-infinity violation of the linearized constraints corresponding to D. When D=0, the
-        # violation is max(max(B[:NUM_CONSTRAINTS]), 0) = CVAL[NUM_VARS]. PREREC is the reduction of this 
+        # violation is np.max(np.append(B[:NUM_CONSTRAINTS], 0)) = CVAL[NUM_VARS]. PREREC is the reduction of this 
         # violation achieved by D, which is nonnegative in theory; PREREC = 0 iff B[:NUM_CONSTRAINTS] <= 0, i.e. the
         # trust-region center satisfies the linearized constraints.
         # 2. PREREF may be negative or 0, but it is positive when PREREC = 0 and shortd is False
         # 3. Due to 2, in theory, max(PREREC, PREREF) > 0 if shortd is False.
-        prerec = cval[num_vars] - max(max(b[:num_constraints] - d@A[:, :num_constraints]), 0)
+        prerec = cval[num_vars] - np.max(np.append(b[:num_constraints] - d@A[:, :num_constraints], 0))
         preref = np.dot(d, A[:, num_constraints])  # Can be negative
 
         # Evaluate PREREM, which is the predicted reduction in the merit function.
@@ -446,7 +466,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
                 break  # Better action to take? Geometry step, or a RESCUE as in BOBYQA?
 
             # Check whether to break due to maxfun, ftarget, etc.
-            subinfo = checkbreak(maxfun, nf, cstrv, ctol, f, ftarget, x)
+            subinfo = checkbreak_con(maxfun, nf, cstrv, ctol, f, ftarget, x)
             if subinfo != INFO_DEFAULT:
                 info = subinfo
                 break
@@ -567,7 +587,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
                 break
 
             # Check whether to break due to maxfun, ftarget, etc.
-            subinfo = checkbreak(maxfun, nf, cstrv, ctol, f, ftarget, x)
+            subinfo = checkbreak_con(maxfun, nf, cstrv, ctol, f, ftarget, x)
             if subinfo != INFO_DEFAULT:
                 info = subinfo
                 break
@@ -668,7 +688,7 @@ def getcpen(conmat, cpen, cval, delta, fval, rho, sim, simi):
         d = trstlp(A, b, delta)
 
         # Predict the change to F (PREREF) and to the constraint violation (PREREC) due to D.
-        prerec = cval[num_vars] - max(max(b[:num_constraints] - d@A[:, :num_constraints]), 0)
+        prerec = cval[num_vars] - np.max(np.append(b[:num_constraints] - d@A[:, :num_constraints], 0))
         preref = np.dot(d, A[:, num_constraints])  # Can be negative
 
         if not (prerec > 0 and preref < 0):  # PREREC <= 0 or PREREF >=0 or either is NaN

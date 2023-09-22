@@ -197,7 +197,7 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
         iact = np.linspace(0, mcon-1, mcon, dtype=int)
         nact = 0
         d = np.zeros(num_vars)
-        cviol = max(*b, 0)
+        cviol = np.max(np.append(b, 0))
         vmultc = cviol - b
         z = np.eye(num_vars)
         if mcon == 0 or cviol <= 0:
@@ -222,7 +222,7 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
 
         # In Powell's code, stage 2 uses the zdota and cviol calculated by stage1. Here we recalculate
         # them so that they need not be passed from stage 1 to 2, and hence the coupling is reduced.
-        cviol = max(max(b[:num_constraints] - d@A[:, :num_constraints]), 0)
+        cviol = np.max(np.append(b[:num_constraints] - d@A[:, :num_constraints], 0))
     zdota[:nact] = [np.dot(z[:, k], A[:, iact[k]]) for k in range(nact)]
 
     # More initialization
@@ -436,7 +436,7 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
         # maximum residual if thage 1 is being done
         dnew = d + step * sdirn
         if stage == 1:
-            cviol = max(max(b[iact[:nact]] - dnew@A[:, iact[:nact]]), 0)
+            cviol = np.max(np.append(b[iact[:nact]] - dnew@A[:, iact[:nact]], 0))
             # N.B.: cviol will be used when calculating vmultd[nact+1:mcon].
 
         # Zaikun 20211011:
@@ -475,9 +475,9 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
         vmultc = np.maximum(np.zeros(len(vmultc)), (1 - frac)*vmultc + frac*vmultd)
         if stage == 1:
             # cviol = (1 - frac) * cvold + frac * cviol  # Powell's version
-            # In theory, cviol = max(max(b[:num_constraints] - d@A[:, :num_constraints]), 0), yet the
+            # In theory, cviol = np.max(np.append(b[:num_constraints] - d@A[:, :num_constraints], 0)), yet the
             # cviol updated as above can be quite different from this value if A has huge entries (e.g., > 1e20)
-            cviol = max(max(b[:num_constraints] - d@A[:, :num_constraints]), 0)
+            cviol = np.max(np.append(b[:num_constraints] - d@A[:, :num_constraints], 0))
 
         if icon < 0 or icon >= mcon:
             # In Powell's code, the condition is icon == 0. Indeed, icon < 0 cannot hold unless

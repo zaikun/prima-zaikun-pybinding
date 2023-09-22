@@ -53,8 +53,8 @@ def geostep(jdrop, cpen, conmat, cval, delta, fval, factor_gamma, simi):
     A = np.zeros((num_vars, num_constraints + 1))
     A[:, :num_constraints] = ((conmat[:, :num_vars] - np.tile(conmat[:, num_vars], (num_vars, 1)).T)@simi).T
     A[:, num_constraints] = (fval[num_vars] - fval[:num_vars])@simi
-    cvmaxp = max(0, max(-d@A[:, :num_constraints] - conmat[:, num_vars]))
-    cvmaxn = max(0, max(d@A[:, :num_constraints] - conmat[:, num_vars]))
+    cvmaxp = np.max(np.append(0, -d@A[:, :num_constraints] - conmat[:, num_vars]))
+    cvmaxn = np.max(np.append(0, d@A[:, :num_constraints] - conmat[:, num_vars]))
     if 2 * np.dot(d, A[:, num_constraints]) < cpen * (cvmaxp - cvmaxn):
         d *= -1
     return d
