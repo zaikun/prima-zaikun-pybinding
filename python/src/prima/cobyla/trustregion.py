@@ -10,60 +10,9 @@ Python implementation by Nickolai Belakovski
 
 import numpy as np
 import numpy.typing as npt
-from prima.common.consts import REALMIN, REALMAX, EPS
+from prima.common.consts import DEBUGGING, REALMIN, REALMAX, EPS
 from prima.common.powalg import qradd_Rdiag, qrexc_Rdiag
 from prima.common.linalg import isminor
-
-def trrad(delta_in, dnorm, eta1, eta2, gamma1, gamma2, ratio):
-    '''
-    This function updates the trust region radius according to RATIO and DNORM.
-    '''
-
-    if ratio <= eta1:
-        delta = gamma1 * dnorm  # Powell's UOBYQA/NEWOUA
-        # delta = gamma1 * delta_in  # Powell's COBYLA/LINCOA
-        # delta = min(gamma1 * delta_in, dnorm)  # Powell's BOBYQA
-    elif ratio <= eta2:
-        delta = max(gamma1 * delta_in, dnorm)  # Powell's UOBYQA/NEWOUA/BOBYQA/LINCOA
-    else:
-        delta = max(gamma1 * delta_in, gamma2 * dnorm)  # Powell's NEWUOA/BOBYQA
-        # delta = max(delta_in, gamma2 * dnorm)  # Modified version. Works well for UOBYQA
-        # For noise-free CUTEst problems of <= 100 variables, Powell's version works slightly better
-        # than the modified one.
-        # delta = max(delta_in, 1.25*dnorm, dnorm + rho)  # Powell's UOBYQA
-        # delta = min(max(gamma1 * delta_in, gamma2 * dnorm), gamma3 * delta_in)  # Powell's LINCOA, gamma3 = np.sqrt(2)
-
-    # For noisy problems, the following may work better.
-    # if ratio <= eta1:
-    #     delta = gamma1 * dnorm
-    # elseif ratio <= eta2:  # Ensure DELTA >= DELTA_IN
-    #     delta = delta_in
-    # else:  # Ensure DELTA > DELTA_IN with a constant factor
-    #     delta = max(delta_in * (1 + gamma2) / 2, gamma2 * dnorm)
-    return delta
-
-def redrat(ared, pred, rshrink):
-    # This function evaluates the reduction ratio of a trust-region step, handling inf/nan properly.
-    if np.isnan(ared):
-        # This should not happen in unconstrained problems due to the moderated extreme barrier.
-        ratio = -REALMAX
-    elif np.isnan(pred) or pred <= 0:
-        # The trust-region subproblem solver fails in this rare case. Instead of terminating as Powell's
-        # original code does, we set ratio as follows so that the solver may continue to progress.
-        if ared > 0:
-            # The trial point will be accepted, but the trust-region radius will be shrunk if rshrink>0
-            ratio = rshrink/2
-        else:
-            # Set the ration to a large negative number to signify a bad trust-region step, so that the
-            # solver will check whether to take a geometry step or reduce rho.
-            ratio = -REALMAX
-    elif np.isposinf(pred) and np.isposinf(ared):
-        ratio = 1  # ared/pred = NaN if calculated directly
-    elif np.isposinf(pred) and np.isneginf(ared):
-        ratio = -REALMAX  # ared/pred = NaN if calculated directly
-    else:
-        ratio = ared/pred
-    return ratio
 
 
 def trstlp(A_in, b_in, delta):
@@ -168,28 +117,29 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
     5. step. step <= cviol in stage 1.
     '''
     # zdasav = np.zeros(z.shape[1])
-    vmultd = np.zeros(len(vmultc))
-    zdota = np.zeros(z.shape[1])
+    vmultd = np.zeros(np.size(vmultc))
+    zdota = np.zeros(np.size(z, 1))
 
     # Sizes
-    num_vars = A.shape[0]
-    mcon = A.shape[1]
+    num_vars = np.size(A, 0)
+    mcon = np.size(A, 1)
     
-    # Precondictions
-    assert num_vars >= 1
-    assert stage == 1 or stage == 2
-    assert (mcon >= 0 and stage == 1) or (mcon >= 1 and stage == 2)
-    assert b.shape[0] == mcon
-    assert iact.shape[0] == mcon
-    assert vmultc.shape[0] == mcon
-    assert d.shape[0] == num_vars
-    assert z.shape[0] == num_vars and z.shape[1] == num_vars
-    assert delta > 0
-    if stage == 2:
-        assert all(np.isfinite(d)) and np.linalg.norm(d) <= 2 * delta
-        assert nact >= 0 and nact <= min(mcon, num_vars)
-        assert all(vmultc[:mcon]) >= 0
-        # N.B.: Stage 1 defines only VMULTC(1:M); VMULTC(M+1) is undefined!
+    # Preconditions
+    if DEBUGGING:
+        assert num_vars >= 1
+        assert stage == 1 or stage == 2
+        assert (mcon >= 0 and stage == 1) or (mcon >= 1 and stage == 2)
+        assert np.size(b) == mcon
+        assert np.size(iact) == mcon
+        assert np.size(vmultc) == mcon
+        assert np.size(d) == num_vars
+        assert np.size(z, 0) == num_vars and np.size(z, 1) == num_vars
+        assert delta > 0
+        if stage == 2:
+            assert all(np.isfinite(d)) and np.linalg.norm(d) <= 2 * delta
+            assert nact >= 0 and nact <= np.minimum(mcon, num_vars)
+            assert all(vmultc[:mcon]) >= 0
+            # N.B.: Stage 1 defines only VMULTC(1:M); VMULTC(M+1) is undefined!
 
 
     # Initialize according to stage
@@ -236,8 +186,10 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
     # problems: DANWOODLS, GAUSS1LS, GAUSS2LS, GAUSS3LS, KOEBHELB, TAX13322, TAXR13322. Indeed, in all
     # these cases, Inf/NaN appear in d due to extremely large values in A (up to 10^219). To resolve
     # this, we set the maximal number of iterations to maxiter, and terminate if Inf/NaN occurs in d.
-    maxiter = min(10000, 100*max(num_constraints, num_vars))
+    maxiter = np.minimum(10000, 100*np.maximum(num_constraints, num_vars))
     for iter in range(maxiter):
+        if DEBUGGING:
+            assert all(vmultc >= 0)
         if stage == 1:
             optnew = cviol
         else:
@@ -252,11 +204,10 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
             nfail = 0
         else:
             nfail += 1
-        optold = min(optold, optnew)
+        optold = np.minimum(optold, optnew)
         if nfail == 3:
             break
 
-        # TODO: nact needs to be changed to nact-1 in a lot of places, essentially everywhere it acts as an index 
         # If icon exceeds nact, then we add the constraint with index iact[icon] to the active set.
         # Apply Givens rotations so that the last num_vars-nact-1 columns of Z are orthogonal to the gradient
         # of the new constraint, a scalar product being set to 0 if its nonzero value could be due to
@@ -483,9 +434,71 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
             # In Powell's code, the condition is icon == 0. Indeed, icon < 0 cannot hold unless
             # fracmult contains only nan, which should not happen; icon >= mcon should never occur.
             break
+
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert np.size(iact) == mcon
+        assert np.size(vmultc) == mcon
+        assert all(vmultc >= 0)
+        assert np.size(d) == num_vars
+        assert all(np.isfinite(d))
+        assert np.linalg.norm(d) <= 2 * delta
+        assert np.size(z, 0) == num_vars and np.size(z, 1) == num_vars
+        assert nact >= 0 and nact <= np.minimum(mcon, num_vars)
+    
     return iact, nact, d, vmultc, z
-        
-                
 
 
+def trrad(delta_in, dnorm, eta1, eta2, gamma1, gamma2, ratio):
+    '''
+    This function updates the trust region radius according to RATIO and DNORM.
+    '''
 
+    # Preconditions
+    if DEBUGGING:
+        assert delta_in >= dnorm and dnorm > 0
+        assert eta1 >= 0 and eta1 <= eta2 and eta2 < 1
+        assert eta1 >= 0 and eta1 <= eta2 and eta2 < 1
+        assert gamma1 > 0 and gamma1 < 1 and gamma2 > 1
+        # By the definition of RATIO in ratio.f90, RATIO cannot be NaN unless the actual reduction is
+        # NaN, which should NOT happen due to the moderated extreme barrier.
+        assert not np.isnan(ratio)
+
+    #====================#
+    # Calculation starts #
+    #====================#
+
+    if ratio <= eta1:
+        delta = gamma1 * dnorm  # Powell's UOBYQA/NEWOUA
+        # delta = gamma1 * delta_in  # Powell's COBYLA/LINCOA
+        # delta = min(gamma1 * delta_in, dnorm)  # Powell's BOBYQA
+    elif ratio <= eta2:
+        delta = max(gamma1 * delta_in, dnorm)  # Powell's UOBYQA/NEWOUA/BOBYQA/LINCOA
+    else:
+        delta = max(gamma1 * delta_in, gamma2 * dnorm)  # Powell's NEWUOA/BOBYQA
+        # delta = max(delta_in, gamma2 * dnorm)  # Modified version. Works well for UOBYQA
+        # For noise-free CUTEst problems of <= 100 variables, Powell's version works slightly better
+        # than the modified one.
+        # delta = max(delta_in, 1.25*dnorm, dnorm + rho)  # Powell's UOBYQA
+        # delta = min(max(gamma1 * delta_in, gamma2 * dnorm), gamma3 * delta_in)  # Powell's LINCOA, gamma3 = np.sqrt(2)
+
+    # For noisy problems, the following may work better.
+    # if ratio <= eta1:
+    #     delta = gamma1 * dnorm
+    # elseif ratio <= eta2:  # Ensure DELTA >= DELTA_IN
+    #     delta = delta_in
+    # else:  # Ensure DELTA > DELTA_IN with a constant factor
+    #     delta = max(delta_in * (1 + gamma2) / 2, gamma2 * dnorm)
+
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert delta > 0
+    return delta

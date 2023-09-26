@@ -1,4 +1,6 @@
-from prima.common.consts import DAMAGING_ROUNDING, INFO_DEFAULT
+from prima.common.consts import DEBUGGING
+from prima.common.infos import DAMAGING_ROUNDING, INFO_DEFAULT
+from prima.common.linalg import isinv
 import numpy as np
 
 
@@ -7,8 +9,37 @@ def updatexfc(jdrop, constr, cpen, cstrv, d, f, conmat, cval, fval, sim, simi):
     This function revises the simplex by updating the elements of SIM, SIMI, FVAL, CONMAT, and CVAL
     '''
 
-    num_constraints = len(constr)
-    num_vars = sim.shape[0]
+    # Local variables
+    itol = 1
+
+    # Sizes
+    num_constraints = np.size(constr)
+    num_vars = np.size(sim, 0)
+
+    # Preconditions
+    if DEBUGGING:
+        assert num_constraints >= 0
+        assert num_vars >= 1
+        assert jdrop >= 0 and jdrop <= num_vars + 1
+        assert not any(np.isnan(constr) | np.isneginf(constr))
+        assert not (np.isnan(cstrv) | np.isposinf(cstrv))
+        assert np.size(d) == num_vars and all(np.isfinite(d))
+        assert not (np.isnan(f) | np.isposinf(f))
+        assert np.size(conmat, 0) == num_constraints and np.size(conmat, 1) == num_vars + 1
+        assert not (np.isnan(conmat) | np.isneginf(conmat)).any()
+        assert np.size(cval) == num_vars + 1 and not any(cval < 0 | np.isnan(cval) | np.isposinf(cval))
+        assert np.size(fval) == num_vars + 1 and not any(np.isnan(fval) | np.isposinf(fval))
+        assert np.size(sim, 0) == num_vars and np.size(sim, 1) == num_vars + 1
+        assert np.isfinite(sim).all()
+        assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0)
+        assert np.size(simi, 0) == num_vars and np.size(simi, 1) == num_vars
+        assert np.isfinite(simi).all()
+        assert isinv(sim[:, :num_vars], simi, itol)
+    
+    #====================#
+    # Calculation starts #
+    #====================#
+
 
     # Do nothing when JDROP is None. This can only happen after a trust-region step.
     if jdrop is None:  # JDROP is None is impossible if the input is correct.
@@ -51,26 +82,65 @@ def updatexfc(jdrop, constr, cpen, cstrv, d, f, conmat, cval, fval, sim, simi):
         info = DAMAGING_ROUNDING
         sim = sim_old
         simi = simi_old
-    
+
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert np.size(conmat, 0) == num_constraints and np.size(conmat, 1) == num_vars + 1
+        assert not (np.isnan(conmat) | np.isneginf(conmat)).any()
+        assert np.size(cval) == num_vars + 1 and not any(cval < 0 | np.isnan(cval) | np.isposinf(cval))
+        assert np.size(fval) == num_vars + 1 and not any(np.isnan(fval) | np.isposinf(fval))
+        assert np.size(sim, 0) == num_vars and np.size(sim, 1) == num_vars + 1
+        assert np.isfinite(sim).all()
+        assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0)
+        assert np.size(simi, 0) == num_vars and np.size(simi, 1) == num_vars
+        assert np.isfinite(simi).all()
+        assert isinv(sim[:, :num_vars], simi, itol) or info == DAMAGING_ROUNDING
     
     return sim, simi, fval, conmat, cval, info
 
 def findpole(cpen, cval, fval):
-    # This subroutine identifies the best vertex of the current simplex with respect to the merit
-    # function PHI = F + CPEN * CSTRV.
-    n = len(fval) - 1  # used for debugging which I have not implemented yet
+    '''
+    This subroutine identifies the best vertex of the current simplex with respect to the merit
+    function PHI = F + CPEN * CSTRV.
+    '''
+
+    # Size
+    num_vars = np.size(fval) - 1
+
+    # Preconditions
+    if DEBUGGING:
+        assert cpen > 0
+        assert np.size(cval) == num_vars + 1 and not any(cval < 0 | np.isnan(cval) | np.isposinf(cval))
+        assert np.size(fval) == num_vars + 1 and not any(np.isnan(fval) | np.isposinf(fval))
+
+    #====================#
+    # Calculation starts #
+    #====================#
 
     # Identify the optimal vertex of the current simplex
-    jopt = len(fval) - 1
+    jopt = np.size(fval) - 1
     phi = fval + cpen * cval
-    phimin = min(phi)
+    phimin = np.min(phi)
     joptcandidate = np.argmin(phi)
     if phi[joptcandidate] < phi[jopt]:
         jopt = joptcandidate
-    if cpen <= 0 and any(np.logical_and(cval < cval[jopt], phi <= phimin)):
+    if cpen <= 0 and any(cval < cval[jopt] & phi <= phimin):
         # jopt is the index of the minimum value of cval
         # on the set of cval values where phi <= phimin
-        jopt = np.where(cval == min(cval[phi <= phimin]))[0][0]
+        jopt = np.where(cval == np.min(cval[phi <= phimin]))[0][0]
+
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert jopt >= 0 and jopt < num_vars + 1
+        assert jopt == num_vars or phi[jopt] < phi[num_vars] or (phi[jopt] <= phi[num_vars] and cval[jopt] < cval[num_vars])
     return jopt
 
 
@@ -100,8 +170,34 @@ def updatepole(cpen, conmat, cval, fval, sim, simi):
     # need to call UPDATEPOLE after updating CPEN at the beginning of each trust-region iteration and
     # after each invocation of REDRHO.
 
+    # Local variables
+    itol = 1
+
+    # Sizes
     num_constraints = conmat.shape[0]
     num_vars = sim.shape[0]
+
+    # Preconditions
+    if DEBUGGING:
+        assert num_constraints >= 0
+        assert num_vars >= 1
+        assert cpen > 0
+        assert np.size(conmat, 0) == num_constraints and np.size(conmat, 1) == num_vars + 1
+        assert not (np.isnan(conmat) | np.isneginf(conmat)).any()
+        assert np.size(cval) == num_vars + 1 and not any(cval < 0 | np.isnan(cval) | np.isposinf(cval))
+        assert np.size(fval) == num_vars + 1 and not any(np.isnan(fval) | np.isposinf(fval))
+        assert np.size(sim, 0) == num_vars and np.size(sim, 1) == num_vars + 1
+        assert np.isfinite(sim).all()
+        assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0)
+        assert np.size(simi, 0) == num_vars and np.size(simi, 1) == num_vars
+        assert np.isfinite(simi).all()
+        assert isinv(sim[:, :num_vars], simi, itol)
+
+    #====================#
+    # Calculation starts #
+    #====================#
+
+    # INFO must be set, as it is an output.
     info = INFO_DEFAULT
 
     # Identify the optimal vertex of the current simplex.
@@ -153,5 +249,24 @@ def updatepole(cpen, conmat, cval, fval, sim, simi):
         info = DAMAGING_ROUNDING
         sim = sim_old
         simi = simi_old
+
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert findpole(cpen, cval, fval) == num_vars or info == DAMAGING_ROUNDING
+        assert np.size(conmat, 0) == num_constraints and np.size(conmat, 1) == num_vars + 1
+        assert not (np.isnan(conmat) | np.isneginf(conmat)).any()
+        assert np.size(cval) == num_vars + 1 and not any(cval < 0 | np.isnan(cval) | np.isposinf(cval))
+        assert np.size(fval) == num_vars + 1 and not any(np.isnan(fval) | np.isposinf(fval))
+        assert np.size(sim, 0) == num_vars and np.size(sim, 1) == num_vars + 1
+        assert np.isfinite(sim).all()
+        assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0)
+        assert np.size(simi, 0) == num_vars and np.size(simi, 1) == num_vars
+        assert np.isfinite(simi).all()
+        # Do not check SIMI = SIM[:, :num_vars]^{-1}, as it may not be true due to damaging rounding.
+        assert isinv(sim[:, :num_vars], simi, itol) or info == DAMAGING_ROUNDING
 
     return conmat, cval, fval, sim, simi, info

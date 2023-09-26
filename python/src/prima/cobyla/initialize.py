@@ -1,31 +1,38 @@
 from prima.common.checkbreak import checkbreak_con
-from prima.common.consts import INFO_DEFAULT, REALMAX
+from prima.common.consts import DEBUGGING, REALMAX
+from prima.common.infos import INFO_DEFAULT
 from prima.common.evaluate import evaluate, moderatec, moderatef
+from prima.common.history import savehist
+from prima.common.message import fmsg
 from prima.common.selectx import savefilt
 
 import numpy as np
 
-def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0, srname):
+def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0, xhist, fhist, chist, conhist, maxhist, srname):
     '''
     This subroutine does the initialization concerning X, function values, and constraints.
     '''
+
+    # Local variables
+    solver = 'COBYLA'
 
     # Sizes
     num_constraints = np.size(constr0)
     num_vars = np.size(x0)
 
     # Preconditions
-    assert num_constraints >= 0, f'M >= 0 {srname}'
-    assert num_vars >= 1, f'N >= 1 {srname}'
-    assert abs(iprint) <= 3, f'IPRINT is 0, 1, -1, 2, -2, 3, or -3 {srname}'
-    # assert conmat.shape == (num_constraints , num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
-    # assert cval.size == num_vars + 1, f'CVAL.size == N+1 {srname}'
-    # assert maxchist * (maxchist - maxhist) == 0, f'CHIST.shape == 0 or MAXHIST {srname}'
-    # assert conhist.shape[0] == num_constraints and maxconhist * (maxconhist - maxhist) == 0, 'CONHIST.shape[0] == num_constraints, SIZE(CONHIST, 2) == 0 or MAXHIST {srname)}'
-    # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
-    # assert xhist.shape[0] == num_vars and maxxhist * (maxxhist - maxhist) == 0, 'XHIST.shape[0] == N, SIZE(XHIST, 2) == 0 or MAXHIST {srname)}'
-    assert all(np.isfinite(x0)), f'X0 is finite {srname}'
-    assert rhobeg > 0, f'RHOBEG > 0 {srname}'
+    if DEBUGGING:
+        assert num_constraints >= 0, f'M >= 0 {srname}'
+        assert num_vars >= 1, f'N >= 1 {srname}'
+        assert abs(iprint) <= 3, f'IPRINT is 0, 1, -1, 2, -2, 3, or -3 {srname}'
+        # assert conmat.shape == (num_constraints , num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
+        # assert cval.size == num_vars + 1, f'CVAL.size == N+1 {srname}'
+        # assert maxchist * (maxchist - maxhist) == 0, f'CHIST.shape == 0 or MAXHIST {srname}'
+        # assert conhist.shape[0] == num_constraints and maxconhist * (maxconhist - maxhist) == 0, 'CONHIST.shape[0] == num_constraints, SIZE(CONHIST, 2) == 0 or MAXHIST {srname)}'
+        # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
+        # assert xhist.shape[0] == num_vars and maxxhist * (maxxhist - maxhist) == 0, 'XHIST.shape[0] == N, SIZE(XHIST, 2) == 0 or MAXHIST {srname)}'
+        assert all(np.isfinite(x0)), f'X0 is finite {srname}'
+        assert rhobeg > 0, f'RHOBEG > 0 {srname}'
 
     #====================#
     # Calculation starts #
@@ -62,12 +69,10 @@ def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0, srna
             f, constr, cstrv = evaluate(calcfc, x)
         
         # Print a message about the function/constraint evaluation according to IPRINT.
-        # TODO: Finish implementing fmsg, if decided that its worth it
-        # fmsg(solver, iprint, k, f, x, cstrv, constr)
+        fmsg(solver, 'Initialization', iprint, k, rhobeg, f, x, cstrv, constr)
 
         # Save X, F, CONSTR, CSTRV into the history.
-        # TODO: Implement history (maybe we need it for the iterations?)
-        # savehist(k, x, xhist, f, fhist, cstrv, chist, constr, conhist)
+        savehist(maxhist, x, xhist, f, fhist, cstrv, chist, constr, conhist)
 
         # Save F, CONSTR, and CSTRV to FVAL, CONMAT, and CVAL respectively.
         evaluated[j] = True
@@ -101,23 +106,24 @@ def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0, srna
     #==================#
 
     # Postconditions
-    assert nf <= maxfun, f'NF <= MAXFUN {srname}'
-    assert evaluated.size == num_vars + 1, f'EVALUATED.size == Num_vars + 1 {srname}'
-    # assert chist.size == maxchist, f'CHIST.size == MAXCHIST {srname}'
-    # assert conhist.shape== (num_constraints, maxconhist), f'CONHIST.shape == [M, MAXCONHIST] {srname}'
-    assert conmat.shape == (num_constraints, num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
-    assert not (np.isnan(conmat).any() or np.isneginf(conmat).any()), f'CONMAT does not contain NaN/-Inf {srname}'
-    assert cval.size == num_vars + 1 and not (any(cval < 0) or any(np.isnan(cval)) or any(np.isposinf(cval))), f'CVAL.shape == Num_vars+1 and CVAL does not contain negative values or NaN/+Inf {srname}'
-    # assert fhist.shape == maxfhist, f'FHIST.shape == MAXFHIST {srname}'
-    # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
-    assert fval.size == num_vars + 1 and not (any(np.isnan(fval)) or any(np.isposinf(fval))), f'FVAL.shape == Num_vars+1 and FVAL is not NaN/+Inf {srname}'
-    # assert xhist.shape == (num_vars, maxxhist), f'XHIST.shape == [N, MAXXHIST] {srname}'
-    assert sim.shape == (num_vars, num_vars + 1), f'SIM.shape == [N, N+1] {srname}'
-    assert np.isfinite(sim).all(), f'SIM is finite {srname}'
-    assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0), f'SIM(:, 1:N) has no zero column {srname}'
-    assert simi.shape == (num_vars, num_vars), f'SIMI.shape == [N, N] {srname}'
-    assert np.isfinite(simi).all(), f'SIMI is finite {srname}'
-    assert np.allclose(sim[:, :num_vars] @ simi, np.eye(num_vars), rtol=0.1, atol=0.1) or not all(evaluated), f'SIMI = SIM(:, 1:N)^{-1} {srname}'
+    if DEBUGGING:
+        assert nf <= maxfun, f'NF <= MAXFUN {srname}'
+        assert evaluated.size == num_vars + 1, f'EVALUATED.size == Num_vars + 1 {srname}'
+        # assert chist.size == maxchist, f'CHIST.size == MAXCHIST {srname}'
+        # assert conhist.shape== (num_constraints, maxconhist), f'CONHIST.shape == [M, MAXCONHIST] {srname}'
+        assert conmat.shape == (num_constraints, num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
+        assert not (np.isnan(conmat).any() or np.isneginf(conmat).any()), f'CONMAT does not contain NaN/-Inf {srname}'
+        assert cval.size == num_vars + 1 and not (any(cval < 0) or any(np.isnan(cval)) or any(np.isposinf(cval))), f'CVAL.shape == Num_vars+1 and CVAL does not contain negative values or NaN/+Inf {srname}'
+        # assert fhist.shape == maxfhist, f'FHIST.shape == MAXFHIST {srname}'
+        # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
+        assert fval.size == num_vars + 1 and not (any(np.isnan(fval)) or any(np.isposinf(fval))), f'FVAL.shape == Num_vars+1 and FVAL is not NaN/+Inf {srname}'
+        # assert xhist.shape == (num_vars, maxxhist), f'XHIST.shape == [N, MAXXHIST] {srname}'
+        assert sim.shape == (num_vars, num_vars + 1), f'SIM.shape == [N, N+1] {srname}'
+        assert np.isfinite(sim).all(), f'SIM is finite {srname}'
+        assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0), f'SIM(:, 1:N) has no zero column {srname}'
+        assert simi.shape == (num_vars, num_vars), f'SIMI.shape == [N, N] {srname}'
+        assert np.isfinite(simi).all(), f'SIMI is finite {srname}'
+        assert np.allclose(sim[:, :num_vars] @ simi, np.eye(num_vars), rtol=0.1, atol=0.1) or not all(evaluated), f'SIMI = SIM(:, 1:N)^{-1} {srname}'
     
     return evaluated, conmat, cval, sim, simi, fval, nf, info
 
@@ -139,15 +145,26 @@ def initfilt(conmat, ctol, cweight, cval, fval, sim, evaluated, cfilt, confilt, 
     maxfilt = len(ffilt)
 
     # Precondictions
-    assert num_constraints >= 0
-    assert num_vars >= 1
-    assert maxfilt >= 1
-    assert confilt.shape == (num_constraints, maxfilt)
-    assert cfilt.shape == (maxfilt,)
-    assert xfilt.shape == (num_vars, maxfilt)
-    assert ffilt.shape == (maxfilt,)
-    assert conmat.shape == (num_constraints, num_vars+1)
-    # TODO: Need to finish these preconditions
+    if DEBUGGING:
+        assert num_constraints >= 0
+        assert num_vars >= 1
+        assert maxfilt >= 1
+        assert np.size(confilt, 0) == num_constraints and np.size(confilt, 1) == maxfilt
+        assert np.size(cfilt) == maxfilt
+        assert np.size(xfilt, 0) == num_vars and np.size(xfilt, 1) == maxfilt
+        assert np.size(ffilt) == maxfilt
+        assert np.size(conmat, 0) == num_constraints and np.size(conmat, 1) == num_vars + 1
+        assert not (np.isnan(conmat) | np.isneginf(conmat)).any()
+        assert np.size(cval) == num_vars + 1 and not any(cval < 0 | np.isnan(cval) | np.isposinf(cval))
+        assert np.size(fval) == num_vars + 1 and not any(np.isnan(fval) | np.isposinf(fval))
+        assert np.size(sim, 0) == num_vars and np.size(sim, 1) == num_vars + 1
+        assert np.isfinite(sim).all()
+        assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0)
+        assert np.size(evaluated) == num_vars + 1
+
+    #====================#
+    # Calculation starts #
+    #====================#
 
 
     nfilt = 0
@@ -159,5 +176,21 @@ def initfilt(conmat, ctol, cweight, cval, fval, sim, evaluated, cfilt, confilt, 
                 x = sim[:, i]  # i == num_vars, i.e. the last column
             nfilt, cfilt, ffilt, xfilt, confilt = savefilt(cval[i], ctol, cweight, fval[i], x, nfilt, cfilt, ffilt, xfilt, conmat[:, i], confilt)
 
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert nfilt <= maxfilt
+        assert np.size(confilt, 0) == num_constraints and np.size(confilt, 1) == maxfilt
+        assert not (np.isnan(confilt[:, :nfilt]) | np.isneginf(confilt[:, :nfilt])).any()
+        assert np.size(cfilt) == maxfilt
+        assert not any(cfilt[:nfilt] < 0 | np.isnan(cfilt[:nfilt]) | np.isposinf(cfilt[:nfilt]))
+        assert np.size(xfilt, 0) == num_vars and np.size(xfilt, 1) == maxfilt
+        assert not (np.isnan(xfilt[:, :nfilt])).any()
+        # The last calculated X can be Inf (finite + finite can be Inf numerically).
+        assert np.size(ffilt) == maxfilt
+        assert not any(np.isnan(ffilt[:nfilt]) | np.isposinf(ffilt[:nfilt]))
 
     return nfilt

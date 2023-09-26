@@ -1,3 +1,4 @@
+from prima.common.consts import DEBUGGING
 import numpy as np
 
 def redrho(rho_in, rhoend):
@@ -9,7 +10,8 @@ def redrho(rho_in, rhoend):
     '''
 
     # Preconditions
-    assert rho_in > rhoend > 0
+    if DEBUGGING:
+        assert rho_in > rhoend > 0
 
     #====================#
     # Calculation starts #
@@ -29,6 +31,7 @@ def redrho(rho_in, rhoend):
     #==================#
 
     # Postconditions
-    assert rho_in > rho >= rhoend
+    if DEBUGGING:
+        assert rho_in > rho >= rhoend
     
     return rho

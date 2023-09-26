@@ -10,14 +10,6 @@ REALMAX = np.finfo(float).max
 FUNCMAX = 2.0**100
 CONSTRMAX = FUNCMAX
 EPS = np.finfo(float).eps
-INFO_DEFAULT = 0
-SMALL_TR_RADIUS = 0  # Why is this same as default?
-MAXTR_REACHED = 20
-DAMAGING_ROUNDING = 7
-NAN_INF_X = -1
-NAN_INF_F = -2
-FTARGET_ACHIEVED = 1
-MAXFUN_REACHED = 3
 
 # Some default values
 RHOBEG_DEFAULT = 1

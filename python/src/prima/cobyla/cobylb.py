@@ -1,51 +1,19 @@
 import numpy as np
 from prima.common.checkbreak import checkbreak_con
-from prima.common.consts import INFO_DEFAULT, REALMAX, EPS, MAXTR_REACHED, \
-                    DAMAGING_ROUNDING, SMALL_TR_RADIUS, DEBUGGING, MIN_MAXFILT
+from prima.common.consts import REALMAX, EPS, DEBUGGING, MIN_MAXFILT
+from prima.common.infos import INFO_DEFAULT, MAXTR_REACHED, DAMAGING_ROUNDING, \
+                    SMALL_TR_RADIUS
 from prima.common.evaluate import evaluate
 from prima.common.history import savehist
+from prima.common.linalg import isinv
+from prima.common.message import fmsg, retmsg, rhomsg
+from prima.common.ratio import redrat
 from prima.common.redrho import redrho
 from prima.common.selectx import savefilt, selectx
 from prima.cobyla.update import updatepole, findpole, updatexfc
 from prima.cobyla.geometry import assess_geo, setdrop_tr, geostep, setdrop_geo
-from prima.cobyla.trustregion import trstlp, redrat, trrad
+from prima.cobyla.trustregion import trstlp, trrad
 from prima.cobyla.initialize import initxfc, initfilt
-
-def fcratio(conmat, fval):
-    '''
-    This function calculates the ratio between the "typical changre" of F and that of CONSTR.
-    See equations (12)-(13) in Section 3 of the COBYLA paper for the definition of the ratio.
-    '''
-
-    # Preconditions
-    assert np.size(fval) >= 1
-    assert np.size(conmat, 1) == np.size(fval)
-
-    #====================#
-    # Calculation starts #
-    #====================#
-
-    cmin = np.min(conmat, axis=1)
-    cmax = np.max(conmat, axis=1)
-    fmin = min(fval)
-    fmax = max(fval)
-    if any(cmin < 0.5 * cmax) and fmin < fmax:
-        denom = np.min(np.maximum(cmax, 0) - cmin, where=cmin < 0.5 * cmax, initial=np.inf)
-        # Powell mentioned the following alternative in section 4 of his COBYLA paper. According to a test
-        # on 20230610, it does not make much difference to the performance.
-        # denom = np.max(max(*cmax, 0) - cmin, mask=(cmin < 0.5 * cmax))
-        r = (fmax - fmin) / denom
-    else:
-        r = 0
-
-    #==================#
-    # Calculation ends #
-    #==================#
-
-    # Postconditions
-    assert r >= 0
-
-    return r
 
 
 def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
@@ -62,6 +30,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     conhist = []
 
     # Local variables
+    solver = 'COBYLA'
     # CPENMIN is the minimum of the penalty parameter CPEN for the L-infinity constraint violation in
     # the merit function. Note that CPENMIN = 0 in Powell's implementation, which allows CPEN to be 0.
     # Here, we take CPENMIN > 0 so that CPEN is always positive. This avoids the situation where PREREM
@@ -114,7 +83,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     # from the other vertices to SIM[:, NUM_VARS]. FVAL, CONMAT, and CVAL hold the function values,
     # constraint values, and constraint violations on the vertices in the order corresponding to SIM.
     evaluated, conmat, cval, sim, simi, fval, nf, subinfo = initxfc(calcfc, iprint, maxfun, constr, ctol, f, ftarget, rhobeg, x,
-      srname="COBYLA")
+      xhist, fhist, chist, conhist, maxhist, srname="COBYLA")
     
     # Initialize the filter, including xfilt, ffilt, confiolt, cfilt, and nfilt.
     # N.B.: The filter is used only when selecting which iterate to return. It does not
@@ -144,8 +113,23 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
         # TODO: Implement me
         # rangehist(nf, xhist, fhist, chist, conhist)
         # print a return message according to IPRINT.
-        # TODO: Implement me
-        # retmsg("COBYLA", info, iprint, nf, f, x, cstrv, constr)
+        retmsg(solver, info, iprint, nf, f, x, cstrv, constr)
+        # Postconditions
+        if DEBUGGING:
+            assert nf <= maxfun
+            assert np.size(x) == num_vars and not any(np.isnan(x))
+            assert not (np.isnan(f) or np.isposinf(f))
+            # assert np.size(xhist, 0) == n and np.size(xhist, 1) == maxxhist
+            # assert not any(np.isnan(xhist(:, 1:min(nf, maxxhist))))
+            # The last calculated X can be Inf (finite + finite can be Inf numerically).
+            # assert np.size(fhist) == maxfhist
+            # assert not any(np.isnan(fhist(1:min(nf, maxfhist))) or np.isposinf(fhist(1:min(nf, maxfhist))))
+            # assert np.size(conhist, 0) == m and np.size(conhist, 1) == maxconhist
+            # assert not any(np.isnan(conhist(:, 1:min(nf, maxconhist))) or np.isneginf(conhist(:, 1:min(nf, maxconhist))))
+            # assert np.size(chist) == maxchist
+            # assert not any(chist(1:min(nf, maxchist)) < 0 or np.isnan(chist(1:min(nf, maxchist))) or np.isposinf(chist(1:min(nf, maxchist))))
+            # nhist = minval([nf, maxfhist, maxchist])
+            # assert not any(isbetter(fhist(1:nhist), chist(1:nhist), f, cstrv, ctol))
 
 
     # Set some more initial values.
@@ -159,7 +143,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     # code simply initializes CPEN to 0.
     rho = rhobeg
     delta = rhobeg
-    cpen = max(cpenmin, min(1.0E3, fcratio(conmat, fval)))  # Powell's code: CPEN = ZERO
+    cpen = np.maximum(cpenmin, np.minimum(1.0E3, fcratio(conmat, fval)))  # Powell's code: CPEN = ZERO
     prerec = -REALMAX
     preref = -REALMAX
     prerem = -REALMAX
@@ -177,21 +161,12 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     # T. M. Ragonneau's thesis: "Model-Based Derivative-Free Optimization Methods and Software."
     # According to test on 20230613, for COBYLA, this Powellful updating scheme of DELTA works slightly
     # better than setting directly DELTA = max(NEW_DELTA, RHO).
-    gamma3 = max(1, min(0.75 * gamma2, 1.5))
+    gamma3 = np.maximum(1, np.minimum(0.75 * gamma2, 1.5))
 
     # MAXTR is the maximal number of trust region iterations. Each trust-region iteration takes 1 or 2
     # function evaluations unless the trust-region step is short or the trust-region subproblem solver
     # fails but the geometry step is not invoked. Thus the following MAXTR is unlikely to be reached
-    # 
-    # 
-    # Normally each trust-region
-    # iteration takes 1 or 2 function evaluations except for the following cases:
-    # 1. The update of cpen alters the optimal vertex
-    # 2. The trust-region step is short or fails to reduce either the
-    #    linearized objective or the linearized constraint violation but
-    #    the geometry step is not invoked.
-    # The following maxtr is unlikely to be reached.
-    maxtr = max(maxfun, 2*maxfun)  # max: precaution against overflow, which will make 2*MAXFUN < 0
+    maxtr = np.maximum(maxfun, 2*maxfun)  # max: precaution against overflow, which will make 2*MAXFUN < 0
     info = MAXTR_REACHED
 
     # Begin the iterative procedure
@@ -201,7 +176,6 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     # step will be taken, corresponding to the "Branch (Delta)" in the COBYLA paper.
     # REDUCE_RHO - Will we reduce rho after the trust-region iteration?
     # COBYLA never sets IMPROVE_GEO and REDUCE_RHO to True simultaneously.
-    
     for tr in range(maxtr):
         # Increase the penalty parameter CPEN, if needed, so that PREREM = PREREF + CPEN * PREREC > 0.
         # This is the first (out of two) update of CPEN, where CPEN increases or remains the same.
@@ -279,8 +253,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
             nf += 1
 
             # Print a message about the function/constraint evaluation accoring to iprint
-            # TODO: Implement me
-            # fmsg(solver, iprint, nf, f, x, cstrv, constr)
+            fmsg(solver, 'Trust region', iprint, nf, delta, f, x, cstrv, constr)
             # Save X, F, CONSTR, CSTRV into the history.
             savehist(maxhist, x, xhist, f, fhist, cstrv, chist, constr, conhist)
             # Save X, F, CONSTR, CSTRV into the filter.
@@ -441,8 +414,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
             nf += 1
 
             # Print a message about the function/constraint evaluation accoring to iprint
-            # TODO: Implement me
-            # fmsg(solver, iprint, nf, f, x, cstrv, constr)
+            fmsg(solver, 'Geometry', iprint, nf, delta, f, x, cstrv, constr)
             # Save X, F, CONSTR, CSTRV into the history.
             savehist(maxhist, x, xhist, f, fhist, cstrv, chist, constr, conhist)
             # Save X, F, CONSTR, CSTRV into the filter.
@@ -470,10 +442,9 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
             rho = redrho(rho, rhoend)
             # THe second (out of two) updates of CPEN, where CPEN decreases or remains the same.
             # Powell's code: cpen = min(cpen, fcratio(fval, conmat)), which may set CPEN to 0.
-            cpen = max(cpenmin, min(cpen, fcratio(conmat, fval)))
+            cpen = np.maximum(cpenmin, np.minimum(cpen, fcratio(conmat, fval)))
             # Print a message about the reduction of rho according to iprint
-            # TODO: implement me!
-            #call rhomsg(solver, iprint, nf, fval(n + 1), rho, sim(:, n + 1), cval(n + 1), conmat(:, n + 1), cpen)
+            rhomsg(solver, iprint, nf, fval[num_vars], rho, sim[:, num_vars], cval[num_vars], conmat[:, num_vars], cpen)
             conmat, cval, fval, sim, simi, subinfo = updatepole(cpen, conmat, cval, fval, sim, simi)
             # Check whether to break due to damaging rounding detected in updatepole
             if subinfo == DAMAGING_ROUNDING:
@@ -489,7 +460,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
         x = sim[:, num_vars] + d
         f, constr, cstrv = evaluate(calcfc, x)
         nf += 1
-        # TODO: retmsg
+        fmsg(solver, 'Trust region', iprint, nf, rho, f, x, cstrv, constr)
         savehist(maxhist, x, xhist, f, fhist, cstrv, chist, constr, conhist)
         nfilt, cfilt, ffilt, xfilt, confilt = savefilt(cstrv, ctol, cweight, f, x, nfilt, cfilt, ffilt, xfilt, constr, confilt)
 
@@ -506,8 +477,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     # call rangehist(nf, xhist, fhist, chist, conhist)
 
     # Print a return message according to IPRINT.
-    # TODO: Implement me
-    #call retmsg(solver, info, iprint, nf, f, x, cstrv, constr)
+    retmsg(solver, info, iprint, nf, f, x, cstrv, constr)
     return x, f, constr, cstrv, nf, xhist, fhist, chist, conhist, info
 
         
@@ -518,10 +488,34 @@ def getcpen(conmat, cpen, cval, delta, fval, rho, sim, simi):
     See the discussions around equation (9) of the COBYLA paper.
     '''
 
-    num_constraints = conmat.shape[0]
-    num_vars = sim.shape[0]
+    # Intermediate variables
+    A = np.zeros((np.size(sim, 0), np.size(conmat, 0) + 1))
+    itol = 1
 
-    A = np.zeros((num_vars, num_constraints + 1))
+    # Sizes
+    num_constraints = np.size(conmat, 0)
+    num_vars = np.size(sim, 0)
+
+    # Preconditions
+    if DEBUGGING:
+        assert num_constraints >= 0
+        assert num_vars >= 1
+        assert cpen > 0
+        assert np.size(conmat, 0) == num_constraints and np.size(conmat, 1) == num_vars + 1
+        assert not (np.isnan(conmat) | np.isneginf(conmat)).any()
+        assert np.size(cval) == num_vars + 1 and not any(cval < 0 | np.isnan(cval) | np.isposinf(cval))
+        assert np.size(fval) == num_vars + 1 and not any(np.isnan(fval) | np.isposinf(fval))
+        assert np.size(sim, 0) == num_vars and np.size(sim, 1) == num_vars + 1
+        assert np.isfinite(sim).all()
+        assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0)
+        assert np.size(simi, 0) == num_vars and np.size(simi, 1) == num_vars
+        assert np.isfinite(simi).all()
+        assert isinv(sim[:, :num_vars], simi, itol)
+        assert delta >= rho and rho > 0
+
+    #====================#
+    # Calculation starts #
+    #====================#
 
     # Initialize INFO, PREREF, and PREREC, which are needed in the postconditions
     info = INFO_DEFAULT
@@ -572,4 +566,53 @@ def getcpen(conmat, cpen, cval, delta, fval, rho, sim, simi):
         if findpole(cpen, cval, fval) == num_vars:
             break
 
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert cpen >= cpen and cpen > 0
+        assert preref + cpen * prerec > 0 or info == DAMAGING_ROUNDING or \
+            not (prerec >= 0 and np.maximum(prerec, preref) > 0) or not np.isfinite(preref)
+
     return cpen
+
+
+def fcratio(conmat, fval):
+    '''
+    This function calculates the ratio between the "typical changre" of F and that of CONSTR.
+    See equations (12)-(13) in Section 3 of the COBYLA paper for the definition of the ratio.
+    '''
+
+    # Preconditions
+    if DEBUGGING:
+        assert np.size(fval) >= 1
+        assert np.size(conmat, 1) == np.size(fval)
+
+    #====================#
+    # Calculation starts #
+    #====================#
+
+    cmin = np.min(conmat, axis=1)
+    cmax = np.max(conmat, axis=1)
+    fmin = min(fval)
+    fmax = max(fval)
+    if any(cmin < 0.5 * cmax) and fmin < fmax:
+        denom = np.min(np.maximum(cmax, 0) - cmin, where=cmin < 0.5 * cmax, initial=np.inf)
+        # Powell mentioned the following alternative in section 4 of his COBYLA paper. According to a test
+        # on 20230610, it does not make much difference to the performance.
+        # denom = np.max(max(*cmax, 0) - cmin, mask=(cmin < 0.5 * cmax))
+        r = (fmax - fmin) / denom
+    else:
+        r = 0
+
+    #==================#
+    # Calculation ends #
+    #==================#
+
+    # Postconditions
+    if DEBUGGING:
+        assert r >= 0
+
+    return r
