@@ -1,19 +1,30 @@
 import numpy as np
-from prima.common.consts import INFO_DEFAULT, REALMAX, EPS, CONSTRMAX, \
-                    MAXTR_REACHED, DAMAGING_ROUNDING, SMALL_TR_RADIUS, \
-                    NAN_INF_X, NAN_INF_F, FTARGET_ACHIEVED, MAXFUN_REACHED
-from prima.common.evaluate import evaluate, moderatec, moderatef
 from prima.common.checkbreak import checkbreak_con
+from prima.common.consts import INFO_DEFAULT, REALMAX, EPS, MAXTR_REACHED, \
+                    DAMAGING_ROUNDING, SMALL_TR_RADIUS, DEBUGGING, MIN_MAXFILT
+from prima.common.evaluate import evaluate
+from prima.common.history import savehist
+from prima.common.redrho import redrho
+from prima.common.selectx import savefilt, selectx
 from prima.cobyla.update import updatepole, findpole, updatexfc
 from prima.cobyla.geometry import assess_geo, setdrop_tr, geostep, setdrop_geo
-from prima.common.selectx import savefilt , selectx
 from prima.cobyla.trustregion import trstlp, redrat, trrad
+from prima.cobyla.initialize import initxfc, initfilt
 
 def fcratio(conmat, fval):
     '''
     This function calculates the ratio between the "typical changre" of F and that of CONSTR.
     See equations (12)-(13) in Section 3 of the COBYLA paper for the definition of the ratio.
     '''
+
+    # Preconditions
+    assert np.size(fval) >= 1
+    assert np.size(conmat, 1) == np.size(fval)
+
+    #====================#
+    # Calculation starts #
+    #====================#
+
     cmin = np.min(conmat, axis=1)
     cmax = np.max(conmat, axis=1)
     fmin = min(fval)
@@ -27,195 +38,30 @@ def fcratio(conmat, fval):
     else:
         r = 0
 
-    return r
-
-def redrho(rho, rhoend):
-    '''
-    This function calculates RHO when it needs to be reduced.
-    The sceme is shared by UOBYQA, NEWUOA, BOBYQA, LINCOA. For COBYLA, Powell's code reduces RHO by
-    'RHO *= 0.5; if RHO <= 1.5 * RHOEND: RHO = RHOEND' as specified in (11) of the COBYLA
-    paper. However, this scheme seems to work better, especially after we introduce DELTA.
-    '''
-
-    rho_ratio = rho / rhoend
-
-    if rho_ratio > 250:
-        rho *= 0.1
-    elif rho_ratio <= 16:
-        rho = rhoend
-    else:
-        rho = np.sqrt(rho_ratio) * rhoend  # rho = np.sqrt(rho * rhoend)
-    
-    return rho
-
-
-def initxfc(calcfc, iprint, maxfun, constr0, ctol, f0, ftarget, rhobeg, x0,
-    conmat, cval, srname):
-    '''
-    This subroutine does the initialization concerning X, function values, and constraints.
-    '''
-
-    # Sizes
-    num_constraints = conmat.shape[0]
-    num_vars = x0.size
-
-    # Preconditions
-    assert num_constraints >= 0, f'M >= 0 {srname}'
-    assert num_vars >= 1, f'N >= 1 {srname}'
-    assert abs(iprint) <= 3, f'IPRINT is 0, 1, -1, 2, -2, 3, or -3 {srname}'
-    assert conmat.shape == (num_constraints , num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
-    assert cval.size == num_vars + 1, f'CVAL.size == N+1 {srname}'
-    # assert maxchist * (maxchist - maxhist) == 0, f'CHIST.shape == 0 or MAXHIST {srname}'
-    # assert conhist.shape[0] == num_constraints and maxconhist * (maxconhist - maxhist) == 0, 'CONHIST.shape[0] == num_constraints, SIZE(CONHIST, 2) == 0 or MAXHIST {srname)}'
-    # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
-    # assert xhist.shape[0] == num_vars and maxxhist * (maxxhist - maxhist) == 0, 'XHIST.shape[0] == N, SIZE(XHIST, 2) == 0 or MAXHIST {srname)}'
-    assert all(np.isfinite(x0)), f'X0 is finite {srname}'
-    assert rhobeg > 0, f'RHOBEG > 0 {srname}'
-
-    #====================#
-    # Calculation starts #
-    #====================#
-
-    # Initialize info to the default value. At return, a value different from this value will
-    # indicate an abnormal return
-    info = INFO_DEFAULT
-
-    # Initialize the simplex. It will be revised during the initialization.
-    sim = np.eye(num_vars, num_vars+1) * rhobeg
-    sim[:, num_vars] = x0
-
-    # evaluated[j] = True iff the function/constraint of SIM[:, j] has been evaluated.
-    evaluated = np.zeros(num_vars+1, dtype=bool)
-
-    # Initialize fval
-    fval = np.zeros(num_vars+1) + REALMAX
-
-    for k in range(num_vars + 1):
-        x = sim[:, num_vars].copy()
-        # We will evaluate F corresponding to SIM(:, J).
-        if k == 0:
-            j = num_vars
-            f = moderatef(f0)
-            constr = moderatec(constr0)
-            cstrv = np.max(np.append(-constr, 0))
-        else:
-            j = k - 1
-            x[j] += rhobeg
-            f, constr, cstrv = evaluate(calcfc, x)
-        
-        # Print a message about the function/constraint evaluation according to IPRINT.
-        # TODO: Finish implementing fmsg, if decided that its worth it
-        # fmsg(solver, iprint, k, f, x, cstrv, constr)
-
-        # Save X, F, CONSTR, CSTRV into the history.
-        # TODO: Implement history (maybe we need it for the iterations?)
-        # savehist(k, x, xhist, f, fhist, cstrv, chist, constr, conhist)
-
-        # Save F, CONSTR, and CSTRV to FVAL, CONMAT, and CVAL respectively.
-        evaluated[j] = True
-        fval[j] = f
-        conmat[:, j] = constr
-        cval[j] = cstrv
-
-        # Check whether to exit.
-        subinfo = checkbreak_con(maxfun, k, cstrv, ctol, f, ftarget, x)
-        if subinfo != INFO_DEFAULT:
-            info = subinfo
-            break
-
-        # Exchange the new vertex of the initial simplex with the optimal vertex if necessary.
-        # This is the ONLY part that is essentially non-parallel.
-        if j < num_vars and fval[j] < fval[num_vars]:
-            fval[j], fval[num_vars] = fval[num_vars], fval[j]
-            cval[j], cval[num_vars] = cval[num_vars], cval[j]
-            conmat[:, [j, num_vars]] = conmat[:, [num_vars, j]]
-            sim[:, num_vars] = x
-            sim[j, :j+1] = -rhobeg  # SIM[:, :j+1] is lower triangular
-
-    nf = np.count_nonzero(evaluated)
-
-    if evaluated.all():
-        # Initialize SIMI to the inverse of SIM[:, :num_vars]
-        simi = np.linalg.inv(sim[:, :num_vars])
-
     #==================#
     # Calculation ends #
     #==================#
 
     # Postconditions
-    assert nf <= maxfun, f'NF <= MAXFUN {srname}'
-    assert evaluated.size == num_vars + 1, f'EVALUATED.size == Num_vars + 1 {srname}'
-    # assert chist.size == maxchist, f'CHIST.size == MAXCHIST {srname}'
-    # assert conhist.shape== (num_constraints, maxconhist), f'CONHIST.shape == [M, MAXCONHIST] {srname}'
-    assert conmat.shape == (num_constraints, num_vars + 1), f'CONMAT.shape = [M, N+1] {srname}'
-    assert not (np.isnan(conmat).any() or np.isneginf(conmat).any()), f'CONMAT does not contain NaN/-Inf {srname}'
-    assert cval.size == num_vars + 1 and not (any(cval < 0) or any(np.isnan(cval)) or any(np.isposinf(cval))), f'CVAL.shape == Num_vars+1 and CVAL does not contain negative values or NaN/+Inf {srname}'
-    # assert fhist.shape == maxfhist, f'FHIST.shape == MAXFHIST {srname}'
-    # assert maxfhist * (maxfhist - maxhist) == 0, f'FHIST.shape == 0 or MAXHIST {srname}'
-    assert fval.size == num_vars + 1 and not (any(np.isnan(fval)) or any(np.isposinf(fval))), f'FVAL.shape == Num_vars+1 and FVAL is not NaN/+Inf {srname}'
-    # assert xhist.shape == (num_vars, maxxhist), f'XHIST.shape == [N, MAXXHIST] {srname}'
-    assert sim.shape == (num_vars, num_vars + 1), f'SIM.shape == [N, N+1] {srname}'
-    assert np.isfinite(sim).all(), f'SIM is finite {srname}'
-    assert all(np.max(abs(sim[:, :num_vars]), axis=0) > 0), f'SIM(:, 1:N) has no zero column {srname}'
-    assert simi.shape == (num_vars, num_vars), f'SIMI.shape == [N, N] {srname}'
-    assert np.isfinite(simi).all(), f'SIMI is finite {srname}'
-    assert np.allclose(sim[:, :num_vars] @ simi, np.eye(num_vars), rtol=0.1, atol=0.1) or not all(evaluated), f'SIMI = SIM(:, 1:N)^{-1} {srname}'
-    
-    return evaluated, sim, simi, fval, nf, info
+    assert r >= 0
 
-
-def initfilt(conmat, ctol, cweight, cval, fval, sim, evaluated, cfilt, confilt, ffilt, xfilt):
-    '''
-    This function initializes the filter (XFILT, etc) that will be used when selecting
-    x at the end of the solver.
-    N.B.:
-    1. Why not initialize the filters using XHIST, etc? Because the history is empty if
-    the user chooses not to output it.
-    2. We decouple INITXFC and INITFILT so that it is easier to parallelize the former
-    if needed.
-    '''
-
-    # Sizes
-    num_constraints = conmat.shape[0]
-    num_vars = sim.shape[0]
-    maxfilt = len(ffilt)
-
-    # Precondictions
-    assert num_constraints >= 0
-    assert num_vars >= 1
-    assert maxfilt >= 1
-    assert confilt.shape == (num_constraints, maxfilt)
-    assert cfilt.shape == (maxfilt,)
-    assert xfilt.shape == (num_vars, maxfilt)
-    assert ffilt.shape == (maxfilt,)
-    assert conmat.shape == (num_constraints, num_vars+1)
-    # TODO: Need to finish these preconditions
-
-
-    nfilt = 0
-    for i in range(num_vars+1):
-        if evaluated[i]:
-            if i < num_vars:
-                x = sim[:, i] + sim[:, num_vars]
-            else:
-                x = sim[:, i]  # i == num_vars, i.e. the last column
-            nfilt, cfilt, ffilt, xfilt, confilt = savefilt(cval[i], ctol, cweight, fval[i], x, nfilt, cfilt, ffilt, xfilt, conmat[:, i], confilt)
-
-
-    return nfilt
+    return r
 
 
 def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
            gamma1, gamma2, rhobeg, rhoend, constr, f, x, 
-           cstrv):
+           cstrv, maxhist):
     '''
     This subroutine performs the actual computations of COBYLA.
     '''
 
-    # A[:, :num_constraints] contains the approximate gradient for the constraints, and A[:, num_constraints] is minus the
-    # approximate gradient for the objective function.
-    A = np.zeros((len(x), len(constr) + 1))
-    
+    # Outputs
+    xhist = []
+    fhist = []
+    chist = []
+    conhist = []
+
+    # Local variables
     # CPENMIN is the minimum of the penalty parameter CPEN for the L-infinity constraint violation in
     # the merit function. Note that CPENMIN = 0 in Powell's implementation, which allows CPEN to be 0.
     # Here, we take CPENMIN > 0 so that CPEN is always positive. This avoids the situation where PREREM
@@ -237,35 +83,52 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     factor_beta = 2.1  # The factor beta in the COBYLA paper
     factor_delta = 1.1  # The factor delta in the COBYLA paper
     factor_gamma = 0.5  # The factor gamma in the COBYLA paper
-    num_constraints = len(constr)
-    num_vars = len(x)
-    # maxxhist = xhist.shape[1]
-    # maxfhist = len(fhist)
-    # maxconhist = conhist.shape[1]
-    # maxchist = len(chist)
-    # maxhist = max(maxxhist, maxfhist, maxconhist, maxchist)
-    conmat = np.zeros((num_constraints, num_vars+1)) - REALMAX
-    cval = np.zeros(num_vars+1) + REALMAX
+
+    # Sizes
+    num_constraints = np.size(constr)
+    num_vars = np.size(x)
+
+    # Preconditions
+    if DEBUGGING:
+        assert abs(iprint) <= 3
+        assert num_constraints >= 0
+        assert num_vars >= 1
+        assert maxfun >= num_vars + 2
+        assert rhobeg >= rhoend and rhoend > 0
+        assert eta1 >= 0 and eta1 <= eta2 and eta2 < 1
+        assert gamma1 > 0 and gamma1 < 1 and gamma2 > 1
+        assert ctol >= 0
+        assert cweight >= 0
+        assert maxhist >= 0 and maxhist <= maxfun
+        assert maxfilt >= min(MIN_MAXFILT, maxfun) and maxfilt <= maxfun
+        assert factor_alpha > 0 and factor_alpha < factor_gamma and factor_gamma < 1
+        assert factor_beta >= factor_delta and factor_delta > 1
+
+    #====================#
+    # Calculation starts #
+    #====================#
     
-    subinfo = 0
-    evaluated, sim, simi, fval, nf, subinfo = initxfc(calcfc, iprint, maxfun, constr, ctol, f, ftarget, rhobeg, x,
-      conmat, cval, srname="COBYLA")
-    # TODO: Need to initialize history with f and x and constr
+    # Initialize SIM, FVAL, CONMAT, and CVAL, together with the history.
+    # After the initialization, SIM[:, NUM_VARS] holds the vertex of the initial simplex with the smallest
+    # function value (regardless of the constraint violation), and SIM[:, :NUM_VARS] holds the displacements
+    # from the other vertices to SIM[:, NUM_VARS]. FVAL, CONMAT, and CVAL hold the function values,
+    # constraint values, and constraint violations on the vertices in the order corresponding to SIM.
+    evaluated, conmat, cval, sim, simi, fval, nf, subinfo = initxfc(calcfc, iprint, maxfun, constr, ctol, f, ftarget, rhobeg, x,
+      srname="COBYLA")
     
     # Initialize the filter, including xfilt, ffilt, confiolt, cfilt, and nfilt.
     # N.B.: The filter is used only when selecting which iterate to return. It does not
     # interfere with the iterations. COBYLA is NOT a filter method but a trust-region method
     # based on an L-inifinity merit function. Powell's implementation does not use a
     # filter to select the iterate, possibly returning a suboptimal iterate.
-    cfilt = np.zeros(min(max(maxfilt, 1), maxfun))
-    confilt = np.zeros((len(constr), len(cfilt)))
-    ffilt = np.zeros(len(cfilt))
-    xfilt = np.zeros((len(x), len(cfilt)))
+    cfilt = np.zeros(np.minimum(np.maximum(maxfilt, 1), maxfun))
+    confilt = np.zeros((np.size(constr), np.size(cfilt)))
+    ffilt = np.zeros(np.size(cfilt))
+    xfilt = np.zeros((np.size(x), np.size(cfilt)))
     nfilt = initfilt(conmat, ctol, cweight, cval, fval, sim, evaluated, cfilt, confilt, ffilt, xfilt)
 
     # TODO: Initfilt and savefilt appear to be working. It did not get tested with a rising edge in the
     # keep array (i.e. a False followed by a True), but it looks like that shouldn't be a problem.
-    # For now we should move on to the rest of the algorithm so that we can update the PR with a milestone.
 
     # Check whether to return due to abnormal cases that may occur during the initialization.
     if subinfo != INFO_DEFAULT:
@@ -362,9 +225,15 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
 
         # Calculate the linear approximations to the objective and constraint functions, placing
         # minus the objective function gradient after the constraint gradients in the array A.
-        # N.B.: TRSTLP accesses A mostly by colums, so it is more reasonable to save A instead of A.T
-        A[:, :num_constraints] = ((conmat[:, :num_vars] - np.tile(conmat[:, num_vars], (num_vars, 1)).T)@simi).T
-        A[:, num_constraints] = (fval[num_vars] - fval[:num_vars])@simi
+        # N.B.: TRSTLP accesses A mostly by columns, so it is more reasonable to save A instead of A.T
+        A = np.hstack((
+            # A[:, :num_constraints] contains the approximate gradient for the constraints, 
+            ((conmat[:, :num_vars] - np.tile(conmat[:, num_vars], (num_vars, 1)).T)@simi).T,
+            # and A[:, num_constraints] is minus the approximate gradient for the objective function.
+            ((fval[num_vars] - fval[:num_vars])@simi).reshape(num_vars, 1)
+        ))
+
+
         # Theoretically, but not numerically, the last entry of b does not affect the result of TRSTLP
         # We set it to -fval[num_vars] following Powell's code.
         b = np.hstack((-conmat[:, num_vars], -fval[num_vars]))
@@ -413,8 +282,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
             # TODO: Implement me
             # fmsg(solver, iprint, nf, f, x, cstrv, constr)
             # Save X, F, CONSTR, CSTRV into the history.
-            # TODO: Implement me
-            # savehist(nf, x, xhist, f, fhist, cstrv, chist, constr, conhist)
+            savehist(maxhist, x, xhist, f, fhist, cstrv, chist, constr, conhist)
             # Save X, F, CONSTR, CSTRV into the filter.
             nfilt, cfilt, ffilt, xfilt, confilt = savefilt(cstrv, ctol, cweight, f, x, nfilt, cfilt, ffilt, xfilt, constr, confilt)
 
@@ -576,8 +444,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
             # TODO: Implement me
             # fmsg(solver, iprint, nf, f, x, cstrv, constr)
             # Save X, F, CONSTR, CSTRV into the history.
-            # TODO: Implement me
-            # savehist(nf, x, xhist, f, fhist, cstrv, chist, constr, conhist)
+            savehist(maxhist, x, xhist, f, fhist, cstrv, chist, constr, conhist)
             # Save X, F, CONSTR, CSTRV into the filter.
             nfilt, cfilt, ffilt, xfilt, confilt = savefilt(cstrv, ctol, cweight, f, x, nfilt, cfilt, ffilt, xfilt, constr, confilt)
 
@@ -622,7 +489,8 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
         x = sim[:, num_vars] + d
         f, constr, cstrv = evaluate(calcfc, x)
         nf += 1
-        # TODO: msg, savehist
+        # TODO: retmsg
+        savehist(maxhist, x, xhist, f, fhist, cstrv, chist, constr, conhist)
         nfilt, cfilt, ffilt, xfilt, confilt = savefilt(cstrv, ctol, cweight, f, x, nfilt, cfilt, ffilt, xfilt, constr, confilt)
 
     # Return the best calculated values of the variables
@@ -640,7 +508,7 @@ def cobylb(calcfc, iprint, maxfilt, maxfun, ctol, cweight, eta1, eta2, ftarget,
     # Print a return message according to IPRINT.
     # TODO: Implement me
     #call retmsg(solver, info, iprint, nf, f, x, cstrv, constr)
-    return x, f, nf, info
+    return x, f, constr, cstrv, nf, xhist, fhist, chist, conhist, info
 
         
 

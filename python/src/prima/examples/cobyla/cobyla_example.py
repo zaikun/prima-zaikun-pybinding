@@ -52,19 +52,49 @@ def calcfc_hexagon(x):
 
 if __name__ == "__main__":
     n_chebyquad = 6
-    x_chebyquad = np.array([i/(n_chebyquad+1) for i in range(1, n_chebyquad+1)])
-    m = 0
-    f = 0
-    cstrv = np.inf
-    x, f = cobyla(calcfc_chebyquad, m, x_chebyquad, f, cstrv)
-    print(x, f)
-    # evaluate
-    f, constr = calcfc_chebyquad(x_chebyquad)
+    
+    # The following lines illustrates how to call the solver to solve the Chebyquad problem.
+    x_chebyquad = np.array([i/(n_chebyquad+1) for i in range(1, n_chebyquad+1)])  # Starting point
+    m = 0  # Dimension of constraints. M must be specified correctly, or the program will crash!
+    result = cobyla(calcfc_chebyquad, m, x_chebyquad)  # This call will not print anything
+
+    # In addition to the compulsory arguments, the following illustration specifies also CONSTR, RHOBEG,
+    # and IPRINT, which are optional. All the unspecified optional arguments (RHOEND, MAXFUN, etc.) will
+    # take their default values coded in the solver.
+    x_chebyquad = np.array([i/(n_chebyquad+1) for i in range(1, n_chebyquad+1)])  # Starting point
+    result = cobyla(calcfc_chebyquad, m, x_chebyquad, rhobeg=0.2 * x_chebyquad[0], iprint=1)
+
+    # The following lines illustrates how to call the solver to solve the Hexagon problem.
     x_hexagon = np.zeros(9) + 2
-    m_hexagon = 14
-    f = 0
-    cstrv = 0
-    initial_f, initial_constr = calcfc_hexagon(x_hexagon)
-    print(initial_f, initial_constr)
-    x, f = cobyla(calcfc_hexagon, m_hexagon, x_hexagon, f, cstrv)
-    print(x, f)
+    m_hexagon = 14  # Dimension of constraints. M must the specified correctly, or the program will crash!
+    result = cobyla(calcfc_hexagon, m_hexagon, x_hexagon)  # This call will not print anything.
+
+    # In addition to the compulsory arguments, the following illustration specifies also CONSTR, RHOBEG,
+    # and IPRINT, which are optional. All the unspecified optional arguments (RHOEND, MAXFUN, etc.) will
+    # take their default values coded in the solver. Note that CONSTR is an output, which will be set to
+    # the value of CONSTR(X_HEXAGON) when the solver returns.
+    result = cobyla(calcfc_hexagon, m_hexagon, x_hexagon, rhobeg=1.0, rhoend=1.0e-3, iprint=1)
+
+    '''
+    ! The following lines illustrates how to call the solver to solve the Chebyquad problem.
+    x_chebyquad = [(real(i, RP) / real(n_chebyquad + 1, RP), i=1, n_chebyquad)] ! Starting point
+    m = 0  ! Dimension of constraints. M must the specified correctly, or the program will crash!
+    call cobyla(calcfc_chebyquad, m, x_chebyquad, f, cstrv)  ! This call will not print anything.
+
+    ! In addition to the compulsory arguments, the following illustration specifies also CONSTR, RHOBEG,
+    ! and IPRINT, which are optional. All the unspecified optional arguments (RHOEND, MAXFUN, etc.) will
+    ! take their default values coded in the solver.
+    x_chebyquad = [(real(i, RP) / real(n_chebyquad + 1, RP), i=1, n_chebyquad)] ! Starting point
+    call cobyla(calcfc_chebyquad, m, x_chebyquad, f, cstrv, rhobeg=0.2_RP * x_chebyquad(1), iprint=1, nf=nf, info=info)
+
+    ! The following lines illustrates how to call the solver to solve the Hexagon problem.
+    x_hexagon = 2.0_RP  ! Starting point.
+    m = 14  ! 
+    call cobyla(calcfc_hexagon, m, x_hexagon, f, cstrv)  ! This call will not print anything.
+
+    ! In addition to the compulsory arguments, the following illustration specifies also CONSTR, RHOBEG,
+    ! and IPRINT, which are optional. All the unspecified optional arguments (RHOEND, MAXFUN, etc.) will
+    ! take their default values coded in the solver. Note that CONSTR is an output, which will be set to
+    ! the value of CONSTR(X_HEXAGON) when the solver returns.
+    x_hexagon = 2.0_RP  ! Starting point.
+    call cobyla(calcfc_hexagon, m, x_hexagon, f, cstrv, constr=constr, rhobeg=1.0_RP, rhoend=1.0D-3, iprint=1, nf=nf, info=info)'''
