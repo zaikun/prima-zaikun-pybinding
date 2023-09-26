@@ -16,7 +16,8 @@ def planerot(x):
     '''
 
     # Preconditions
-    assert len(x) == 2, "x must be a 2-vector"
+    if DEBUGGING:
+        assert len(x) == 2, "x must be a 2-vector"
 
     # ==================
     # Calculation starts
@@ -79,14 +80,15 @@ def planerot(x):
     #====================#
 
     # Postconditions
-    assert G.shape == (2,2)
-    assert np.all(np.isfinite(G))
-    assert abs(G[0, 0] - G[1, 1]) + abs(G[0, 1] + G[1, 0]) <= 0
-    tol = max(1.0E-10, min(1.0E-1, 1.0E6 * EPS))
-    # assert isorth(G, tol)  # TODO: Implement isorth
-    if all(np.logical_and(np.isfinite(x), np.abs(x) < np.sqrt(REALMAX / 2.1))):
-        r = np.linalg.norm(x)
-        assert max(abs(G@x - [r, 0])) <= max(tol, tol * r), 'G @ X = [||X||, 0]'
+    if DEBUGGING:
+        assert G.shape == (2,2)
+        assert np.all(np.isfinite(G))
+        assert abs(G[0, 0] - G[1, 1]) + abs(G[0, 1] + G[1, 0]) <= 0
+        tol = np.maximum(1.0E-10, np.minimum(1.0E-1, 1.0E6 * EPS))
+        assert isorth(G, tol)
+        if all(np.logical_and(np.isfinite(x), np.abs(x) < np.sqrt(REALMAX / 2.1))):
+            r = np.linalg.norm(x)
+            assert max(abs(G@x - [r, 0])) <= max(tol, tol * r), 'G @ X = [||X||, 0]'
 
     return G
 
@@ -141,3 +143,35 @@ def isinv(A, B, tol=None):
     #  Calculation ends #
     #===================#
     return is_inv
+
+
+def isorth(A, tol=None):
+    '''
+    This function tests whether the matrix A has orthonormal columns up to the tolerance TOL.
+    '''
+
+    # Preconditions
+    if DEBUGGING:
+        if present(tol):
+            assert tol >= 0
+
+    #====================#
+    # Calculation starts #
+    #====================#
+
+    num_vars = np.size(A, 1)
+
+    if num_vars > np.size(A, 0):
+        is_orth = False
+    elif (np.isnan(np.sum(abs(A)))):
+        is_orth = False
+    else:
+        if present(tol):
+            is_orth = (abs(A.T@A - np.eye(num_vars)) <= np.maximum(tol, tol * np.max(abs(A)))).all()
+        else:
+            is_orth = (abs(A.T@A - np.eye(num_vars)) <= 0).all()
+
+    #====================#
+    #  Calculation ends  #
+    #====================#
+    return is_orth

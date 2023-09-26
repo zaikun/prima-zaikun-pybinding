@@ -29,7 +29,7 @@ def trstlp(A_in, b_in, delta):
 
     It is possible but rare that a degeneracy may prevent d from attaining the target length delta.
 
-    cviol is the largest constraint violation of the current d: max(b[:m] - A[:,:m].T@d, 0). TODO: Not sure if it should be an @, or what max(vector, scalar) means
+    cviol is the largest constraint violation of the current d: np.maximum(np.append(b[:m] - A[:,:m].T@d, 0)).
     icon is the index of a most violated constraint if cviol is positive.
 
     nact is the number of constraints in the active set and iact[0], ..., iact[nact-1] are their indices,
@@ -403,7 +403,6 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
             vmultd[nact-1] = max(0, vmultd[nact-1])  # This seems never activated.
         # Complete vmultd by finding the new constraint residuals. (Powell wrote "Complete vmultc ...")
         cvshift = dnew@A[:, iact] - b[iact] + cviol  # Only cvshift[nact+1:mcon] is needed
-        # TODO: The fortran code has a matprod for two vectors, not sure what that's supposed to return? cvshift is supposed to be a vector
         cvsabs = abs(dnew)@abs(A[:, iact]) + abs(b[iact]) + cviol
         cvshift[isminor(cvshift, cvsabs)] = 0
         vmultd[nact:mcon] = cvshift[nact:mcon]
@@ -412,7 +411,6 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
         fracmult = [vmultc[i]/(vmultc[i] - vmultd[i]) if vmultd[i] < 0 else REALMAX for i in range(len(vmultd))]
         # Only the places with vmultd < 0 are relevant below, if any.
         icon = np.where((temp_arr := np.array([1, *fracmult])) == min(temp_arr))[0][0] - 1
-        # TODO: The above code is a little strange. It seems like icon could be -1 which in our context is invalid
         frac = min(temp_arr)
 
         # Update d, vmultc, and cviol

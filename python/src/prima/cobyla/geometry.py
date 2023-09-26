@@ -42,7 +42,7 @@ def assess_geo(delta, factor_alpha, factor_beta, sim, simi):
     # constant in the order of delta. This simplex is optimal in the sense that the interpolation
     # system has the minimal condition number, i.e. 1. For this simplex, the distance from
     # V_{N+1} to its opposite face is L/sqrt(n).
-    vsig = 1/np.sqrt(np.sum(simi**2, axis=1)) # TODO: Check axis
+    vsig = 1/np.sqrt(np.sum(simi**2, axis=1))
     veta = np.sqrt(np.sum(sim[:, :num_vars]**2, axis=0))
     adequate_geo = all(vsig >= factor_alpha * delta) and all(veta <= factor_beta * delta)
 
