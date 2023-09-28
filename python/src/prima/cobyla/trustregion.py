@@ -235,7 +235,7 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
                 # same before and after QRADD). Therefore if we supply ZDOTA to LSQR (as Rdiag) as
                 # Powell did, we should use the UNUPDATED version, namely ZDASAV.
                 # vmultd[:nact] = lsqr(A[:, iact[:nact]], A[:, iact[icon]], z[:, :nact], zdasav[:nact])
-                vmultd[:nact] = np.linalg.lstsq(A[:, iact[:nact]], A[:, iact[icon]])[0]
+                vmultd[:nact] = np.linalg.lstsq(A[:, iact[:nact]], A[:, iact[icon]], rcond=None)[0]
                 if not any(np.logical_and(vmultd[:nact] > 0, iact[:nact] <= num_constraints)):
                     # N.B.: This can be triggered by NACT == 0 (among other possibilities)! This is
                     # important, because NACT will be used as an index in the sequel.
@@ -398,7 +398,7 @@ def trstlp_sub(iact: npt.NDArray, nact: int, stage, A, b, delta, d, vmultc, z):
         # force multd[k] = 0 if deviations from this value can be attributed to computer rounding
         # errors. First calculate the new Lagrange multipliers.
         # vmultd[:nact] = lsqr(A[:, iact[:nact]], dnew, z[:, :nact], zdota[:nact])
-        vmultd[:nact] = np.linalg.lstsq(A[:, iact[:nact]], dnew)[0]
+        vmultd[:nact] = np.linalg.lstsq(A[:, iact[:nact]], dnew, rcond=None)[0]
         if stage == 2:
             vmultd[nact-1] = max(0, vmultd[nact-1])  # This seems never activated.
         # Complete vmultd by finding the new constraint residuals. (Powell wrote "Complete vmultc ...")
