@@ -1,5 +1,6 @@
 // Dedicated to the late Professor M. J. D. Powell FRS (1936--2015).
 
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ int prima_init_options(prima_options_t *options)
 
 
 // Function to check whether the problem matches the algorithm
-int prima_check_problem(prima_problem_t *problem, prima_options_t *options, const int use_constr, const prima_algorithm_t algorithm)
+prima_rc_t prima_check_problem(prima_problem_t *problem, prima_options_t *options, const int use_constr, const prima_algorithm_t algorithm)
 {
     if (!problem)
         return PRIMA_NULL_PROBLEM;
@@ -228,11 +229,11 @@ int lincoa_c(prima_obj_t calfun, const void *data, const int n, double x[], doub
 
 
 // The function that does the minimization using a PRIMA solver
-int prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, prima_options_t *options, prima_result_t *result)
+prima_rc_t prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, prima_options_t *options, prima_result_t *result)
 {
     int use_constr = (algorithm == PRIMA_COBYLA);
 
-    int info = prima_check_problem(problem, options, use_constr, algorithm);
+    prima_rc_t info = prima_check_problem(problem, options, use_constr, algorithm);
     if (info == 0)
         info = prima_init_result(result, problem);
 
@@ -271,4 +272,10 @@ int prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, 
     }
 
     return info;
+}
+
+bool prima_is_success(const prima_result_t result)
+{
+    return (result.status == PRIMA_SMALL_TR_RADIUS ||
+            result.status == PRIMA_FTARGET_ACHIEVED) && (result.cstrv <= sqrt(DBL_EPSILON));
 }

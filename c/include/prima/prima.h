@@ -255,7 +255,7 @@ typedef struct {
     double *nlconstr;
 
     // status: return code
-    int status;
+    prima_rc_t status;
 
     // message: exit message
     const char *message;
@@ -277,8 +277,12 @@ int prima_free_result(prima_result_t *result);
  * return    : see prima_rc_t enum for return codes
  */
 PRIMAC_API
-int prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, prima_options_t *options, prima_result_t *result);
+prima_rc_t prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, prima_options_t *options, prima_result_t *result);
 
+
+// Function to check if PRIMA returned normally or ran into abnormal conditions
+PRIMAC_API
+bool prima_is_success(const prima_result_t result);
 
 #ifdef __cplusplus
 }
