@@ -2,6 +2,7 @@
 
 
 #include "prima/prima.h"
+#include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -62,20 +63,10 @@ int prima_init_options(prima_options_t *options)
 
 
 // Function to check whether the problem matches the algorithm
-int prima_check_problem(prima_problem_t *problem, prima_options_t *options, const int use_constr, const prima_algorithm_t algorithm)
+prima_rc_t prima_check_problem(prima_problem_t *problem, prima_options_t *options, const int use_constr, const prima_algorithm_t algorithm)
 {
     if (!problem)
         return PRIMA_NULL_PROBLEM;
-
-    if (algorithm != PRIMA_COBYLA && (problem->calcfc || problem->nlconstr0 || problem->m_nlcon > 0))
-        return PRIMA_PROBLEM_SOLVER_MISMATCH_NONLINEAR_CONSTRAINTS;
-
-    if ((algorithm != PRIMA_COBYLA && algorithm != PRIMA_LINCOA) &&
-        (problem->m_ineq > 0 || problem->m_eq > 0 || problem->Aineq || problem->bineq || problem->Aeq || problem->beq))
-        return PRIMA_PROBLEM_SOLVER_MISMATCH_LINEAR_CONSTRAINTS;
-
-    if ((algorithm != PRIMA_COBYLA && algorithm != PRIMA_LINCOA && algorithm != PRIMA_BOBYQA) && (problem->xl || problem->xu))
-        return PRIMA_PROBLEM_SOLVER_MISMATCH_BOUNDS;
 
     if (!options)
         return PRIMA_NULL_OPTIONS;
@@ -91,7 +82,7 @@ int prima_check_problem(prima_problem_t *problem, prima_options_t *options, cons
 
 
 // Function to initialize the result
-int prima_init_result(prima_result_t *result, prima_problem_t *problem)
+prima_rc_t prima_init_result(prima_result_t *result, prima_problem_t *problem)
 {
     if (!result)
         return PRIMA_NULL_RESULT;
@@ -124,14 +115,14 @@ int prima_init_result(prima_result_t *result, prima_problem_t *problem)
             return PRIMA_MEMORY_ALLOCATION_FAILS;
         }
         for (int i = 0; i < problem->m_nlcon; i++)
-            result->nlconstr[i] = NAN;
+            result->nlconstr[i] = problem->nlconstr0[i];
     }
 
     // nf: number of function evaluations
-    result->nf = INT_MIN;
+    result->nf = 0;
 
     // status: return code
-    result->status = INT_MIN;
+    result->status = PRIMA_RESULT_INITIALIZED;
 
     // message: exit message
     result->message = NULL;
@@ -204,12 +195,6 @@ const char *prima_get_rc_string(const prima_rc_t rc)
             return "NULL result";
         case PRIMA_NULL_FUNCTION:
             return "NULL function";
-        case PRIMA_PROBLEM_SOLVER_MISMATCH_NONLINEAR_CONSTRAINTS:
-            return "Nonlinear constraints were provided for an algorithm that cannot handle them";
-        case PRIMA_PROBLEM_SOLVER_MISMATCH_LINEAR_CONSTRAINTS:
-            return "Linear constraints were provided for an algorithm that cannot handle them";
-        case PRIMA_PROBLEM_SOLVER_MISMATCH_BOUNDS:
-            return "Bounds were provided for an algorithm that cannot handle them";
         default:
             return "Invalid return code";
     }
@@ -242,11 +227,11 @@ int lincoa_c(prima_obj_t calfun, const void *data, const int n, double x[], doub
 
 
 // The function that does the minimization using a PRIMA solver
-int prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, prima_options_t *options, prima_result_t *result)
+prima_rc_t prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, prima_options_t *options, prima_result_t *result)
 {
     int use_constr = (algorithm == PRIMA_COBYLA);
 
-    int info = prima_check_problem(problem, options, use_constr, algorithm);
+    prima_rc_t info = prima_check_problem(problem, options, use_constr, algorithm);
 
     if (info == 0)
         info = prima_init_result(result, problem);
@@ -289,4 +274,10 @@ int prima_minimize(const prima_algorithm_t algorithm, prima_problem_t *problem, 
     }
 
     return info;
+}
+
+bool prima_is_success(const prima_result_t result)
+{
+    return (result.status == PRIMA_SMALL_TR_RADIUS ||
+            result.status == PRIMA_FTARGET_ACHIEVED) && (result.cstrv <= sqrt(DBL_EPSILON));
 }
