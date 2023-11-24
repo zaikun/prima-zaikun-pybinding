@@ -1,0 +1,5 @@
+executable('bobyqa_example', 'bobyqa/bobyqa_example.f90', link_with: lib_prima_f)
+executable('cobyla_example', 'cobyla/cobyla_example.f90', link_with: lib_prima_f)
+executable('lincoa_example', 'lincoa/lincoa_example.f90', link_with: lib_prima_f)
+executable('newuoa_example', 'newuoa/newuoa_example.f90', link_with: lib_prima_f)
+executable('uobyqa_example', 'uobyqa/uobyqa_example.f90', link_with: lib_prima_f)
