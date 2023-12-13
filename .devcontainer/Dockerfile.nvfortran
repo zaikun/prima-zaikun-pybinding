@@ -1,0 +1,11 @@
+FROM ubuntu:22.04
+
+RUN echo "deb [trusted=yes] https://developer.download.nvidia.com/hpc-sdk/ubuntu/amd64/ /" > /etc/apt/sources.list.d/nvhpc.list
+
+# Install devtools
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive
+RUN apt-get install -y vim git less python3 python3-pip python-is-python3 cmake wget gdb
+RUN pip install fortls numpy
+
+# Install compiler
+RUN apt-get update && apt-get install -y nvhpc && apt-get clean

@@ -1,0 +1,9 @@
+FROM ubuntu:22.04
+
+# Install devtools
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive
+RUN apt-get install -y vim git less python3 python3-pip python-is-python3 cmake wget gdb
+RUN pip install fortls numpy
+
+# Install compiler
+RUN apt-get install -y gfortran

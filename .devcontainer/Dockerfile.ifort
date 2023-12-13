@@ -1,0 +1,29 @@
+FROM primadev:base
+
+# Install devtools
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive
+RUN apt-get install -y vim git less python3 python3-pip python-is-python3 cmake wget gdb
+RUN pip install fortls numpy
+
+# Install compiler
+RUN cd /tmp && \
+    wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+    apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+    rm GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+    cd /
+
+RUN echo "deb https://apt.repos.intel.com/oneapi all main" > /etc/apt/sources.list.d/oneAPI.list && \
+    apt-get update && \
+    apt-get install -y intel-oneapi-common-vars intel-oneapi-compiler-fortran
+
+# Create an entrypoint script to ensure that the environment variables
+# are always set up correctly when we run this container.
+# We need to set SETVARS_ARGS otherwise the script will use the command provided
+# to docker as the arguments for the servars script.
+RUN echo '#!/bin/bash' > /entrypoint.sh \
+    && echo 'export SETVARS_ARGS=\ ' >> /entrypoint.sh \
+    && echo 'source /opt/intel/oneapi/setvars.sh' >> /entrypoint.sh \
+    && echo 'exec "$@"' >> /entrypoint.sh \
+    && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

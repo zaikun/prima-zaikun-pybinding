@@ -1,0 +1,21 @@
+FROM ubuntu:22.04
+
+# Install devtools
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive
+RUN apt-get install -y vim git less python3 python3-pip python-is-python3 cmake wget gdb
+RUN pip install fortls numpy
+
+# Install compiler
+# Official deb is at https://www.amd.com/en/developer/aocc.html
+# We borrow Zaikun's since the official can't be automated as it requires a EULA
+RUN wget --directory-prefix /tmp https://github.com/zaikunzhang/aocc_flang/raw/main/aocc_flang.deb.7z.001
+RUN wget --directory-prefix /tmp https://github.com/zaikunzhang/aocc_flang/raw/main/aocc_flang.deb.7z.002
+RUN apt-get install -y p7zip-full  # For 7za
+WORKDIR /tmp
+RUN 7za x aocc_flang.deb.7z.001
+WORKDIR /
+RUN apt-get install -y libncurses5-dev  # Required by aocc
+RUN dpkg -i /tmp/aocc_flang.deb
+# Create a symlink to "rename" flang to aflang for consistency with PRIMA conventions
+RUN ln -s /opt/AMD/aocc-compiler-4.1.0/bin/flang /opt/AMD/aocc-compiler-4.1.0/bin/aflang
+ENV PATH="/opt/AMD/aocc-compiler-4.1.0/bin:${PATH}"

@@ -1,0 +1,15 @@
+{
+    "build" : {
+        "dockerfile": "Dockerfile.aflang"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "fortran-lang.linter-gfortran",
+                "twxs.cmake",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-python.python"
+            ]
+        }
+    }
+}

@@ -1,0 +1,3 @@
+# We ignore the actual devcontainer.json file since the user
+# will change it depending on their needs.
+devcontainer.json
