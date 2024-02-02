@@ -40,9 +40,8 @@ def test_method_without_bounds_throws_correctly():
 
 def test_method_with_bounds_runs_without_bounds():
     x0 = [0.0] * 2
-    with pytest.raises(ValueError) as e_info:
-        minimize(fun, x0, method='BOBYQA')
-        assert e_info.msg == "No bounds were provided for an algorithm that requires them"
+    res = minimize(fun, x0, method='BOBYQA')
+    assert fun.result_point_and_value_are_optimal(res)
 
 
 def test_method_with_bounds_all_variables_bounded():
