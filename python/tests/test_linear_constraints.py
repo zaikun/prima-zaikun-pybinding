@@ -50,9 +50,8 @@ def test_method_without_constraints_warns_correctly():
 
 def test_method_with_linear_constraints_runs_without_constraints():
     x0 = [0.0] * 2
-    with pytest.raises(ValueError) as e_info:
-        minimize(fun, x0, method='LINCOA')
-        assert e_info.msg == "No linear constraints were provided for an algorithm that requires them"
+    res = minimize(fun, x0, method='LINCOA')
+    assert fun.result_point_and_value_are_optimal(res)
 
 
 def test_method_with_linear_constraints_all_variables_constrained():

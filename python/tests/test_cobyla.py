@@ -46,10 +46,9 @@ def test_single_nonlinear_constraint():
 
 
 def test_nonlinear_constraints_not_provided():
-    with pytest.raises(ValueError) as e_info:
-        x0 = [0, 0]
-        minimize(fun, x0, method='COBYLA')
-        assert e_info.msg == "Nonlinear constraints must be provided for COBYLA"
+    x0 = [0, 0]
+    res = minimize(fun, x0, method='COBYLA')
+    assert fun.result_point_and_value_are_optimal(res)
 
 
 def test_nonlinear_constraint_and_equality_constraint_and_inequality_constraint_and_bounds():
