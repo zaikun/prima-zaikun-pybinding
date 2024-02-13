@@ -99,8 +99,20 @@ string(REGEX REPLACE "^v" "" PRIMA_VERSION ${PRIMA_VERSION})
 message(STATUS "Setting PRIMA version to ${PRIMA_VERSION}")
 
 option (PRIMA_ENABLE_PYTHON "Python binding" OFF)
-# We only support GNU compilers for the Python bindings
-if (PRIMA_ENABLE_PYTHON AND PRIMA_ENABLE_C AND (BUILD_SHARED_LIBS MATCHES "OFF") AND (CMAKE_Fortran_COMPILER_ID MATCHES "GNU"))
+if (PRIMA_ENABLE_PYTHON)
+  if(NOT PRIMA_ENABLE_C)
+    message(FATAL_ERROR "Building Python bindings requires C bindings. Please turn on PRIMA_ENABLE_C")
+  endif()
+  if(BUILD_SHARED_LIBS)
+    # This will include libprimaf, libprimafc, and libprimac into the compiled Python binding, removing the need
+    # to properly set the rpath or find those libraries at runtime.
+    # Even if we did make it successfully build with shared libraries, delocate/auditwheel will copy them into the
+    # bindings anyway
+    message(FATAL_ERROR "Building Python bindings requires static libraries. Please disable BUILD_SHARED_LIBS")
+  endif()
+  if(NOT CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+    message(WARNING "Compiling Python bindings with compilers other than GNU has not been tested and no support is planned at this time")
+  endif()
   enable_language(CXX)
   add_subdirectory(python)
 endif ()

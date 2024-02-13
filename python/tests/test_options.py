@@ -1,12 +1,6 @@
 from prima import minimize
 from objective import fun
 import numpy as np
-import pytest
-
-# To test:
-# - providing a normal function
-# - providing a function which accepts arguments
-
 
 def fun_with_star_args(x, *args):
     return fun(x) + args[0][0]

@@ -5,6 +5,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 // standard includes
+#include <iostream>
 #include <limits>
 #include <string>
 #include <utility>
@@ -173,15 +174,18 @@ PYBIND11_MODULE(_prima, m) {
       if(method.is_none()) {
         // Automatically select based on bounds and constraints
         if (constraint_function.is_none() == false) {
+          std::cout << "Nonlinear constraints detected, applying COBYLA" << std::endl;
           algorithm = PRIMA_COBYLA;
         } else if (A_eq.is_none() == false || A_ineq.is_none() == false) {
+          std::cout << "Linear constraints detected without nonlinear constraints, applying LINCOA" << std::endl;
           algorithm = PRIMA_LINCOA;
         } else if (lb.is_none() == false && ub.is_none() == false) {
+          std::cout << "Bounds without linear or nonlinear constraints detected, applying BOBYQA" << std::endl;
           algorithm = PRIMA_BOBYQA;
         } else {
+          std::cout << "No bounds or constraints detected, applying NEWUOA" << std::endl;
           algorithm = PRIMA_NEWUOA; // TODO: UOBYQA?
         }
-        // TODO: Print out to the screen which algorithm was chosen
       } else {
         algorithm = pystr_method_to_algorithm(method);
       }
