@@ -45,8 +45,8 @@ order to run that test by itself.
 - [x] providing anonymous lambda as: objective function, constraint function, callback works without warnings or errors - test_anonymous_lambda.py::test_anonymous_lambda
 
 ## Requirements for compatibility with existing APIs
-- [x] compatible with scipy.optimize.minimize API - test_compatible_interface.py
-- [ ] compatible with PDFO API - test_compatible_interface.py (needs remaining algorithms)
+- [x] compatible with scipy.optimize.minimize API - test_compatibility_scipy.py::test_scipy
+- [x] compatible with PDFO API - test_compatibility_pdfo.py::test_pdfo
 ## Requirements for processing of lists of constraints
 - [ ] providing a list of nonlinear constraint functions without providing either the total dimension or the dimension of each function successfully determines the total number of contraints
 - [ ] providing a list mixing linear and nonlinear constraints leads to successfully setting the appropraite constraints and their successful application

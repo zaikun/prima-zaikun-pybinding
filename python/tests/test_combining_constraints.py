@@ -44,7 +44,7 @@ def test_providing_bounds_and_nonlinear_constraints(capfd):
 
 # This test is re-used for the compatibility tests, hence the extra arguments and their
 # default values
-def test_providing_bounds_and_linear_and_nonlinear_constraints(capfd, minimize=prima_minimize, NLC=prima_NLC, LC=prima_LC, Bounds=prima_Bounds, method=None):
+def test_providing_bounds_and_linear_and_nonlinear_constraints(capfd, minimize=prima_minimize, NLC=prima_NLC, LC=prima_LC, Bounds=prima_Bounds, package='prima'):
     # This test needs a 3 variable objective function so that we can check that the
     # bounds and constraints are all active
     def newfun(x):
@@ -55,19 +55,29 @@ def test_providing_bounds_and_linear_and_nonlinear_constraints(capfd, minimize=p
     x0 = [0, 0, 0]
     # macOS seems to stop just short of the optimal solution, so we help it along by
     # taking a larger initial trust region readius and requiring a smaller final radius
-    # before stopping
-    options = {'rhobeg': 0.1, 'rhoend': 1e-8}
-    if minimize != prima_minimize:  # this implies SciPy
-         # 'tol' is equivalent to 'rhoend' in the SciPy implementation of COBYLA
-        options['tol'] = options['rhoend']
-        del options['rhoend']
+    # before stopping. The different packages have different names for these options.
+    if package == 'prima':
+        options = {'rhobeg': 2, 'rhoend': 1e-8}
+        method = None
+    elif package == 'pdfo':
+        options = {'radius_init': 2, 'radius_final': 1e-8}
+        method = None
+    elif package == 'scipy':
+        options = {'rhobeg': 2, 'tol': 1e-8}
+        # PDFO and PRIMA will select COBYLA but SciPy may select something else, so we tell it to select COBYLA
+        method = 'COBYLA'
+    else:
+        # Since this is test infrastructure under the control of the developers we
+        # should never get here except for a typo or something like that
+        raise ValueError(f"Unknown package: {package}")
+
     res = minimize(newfun, x0, method=method, constraints=[nlc, lc], bounds=bounds, options=options)
     
     assert np.isclose(res.x[0], 5.5, atol=1e-6, rtol=1e-6)
     assert np.isclose(res.x[1], 1, atol=1e-6, rtol=1e-6)
     assert np.isclose(res.x[2], 3.5, atol=1e-6, rtol=1e-6)
     assert np.isclose(res.fun, 9.5, atol=1e-6, rtol=1e-6)
-    if minimize == prima_minimize:
+    if package == 'prima':
         outerr = capfd.readouterr()
         assert outerr.out == "Nonlinear constraints detected, applying COBYLA\n"
         assert outerr.err == ''

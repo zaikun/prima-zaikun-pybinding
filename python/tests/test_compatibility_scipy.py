@@ -12,4 +12,4 @@ def test_prima(capfd):
 
 def test_scipy():
     from scipy.optimize import minimize, NonlinearConstraint as NLC, LinearConstraint as LC, Bounds
-    test_providing_bounds_and_linear_and_nonlinear_constraints(None, minimize, NLC, LC, Bounds, "COBYLA")
+    test_providing_bounds_and_linear_and_nonlinear_constraints(None, minimize, NLC, LC, Bounds, package="scipy")
