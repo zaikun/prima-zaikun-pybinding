@@ -1,5 +1,18 @@
 import numpy as np
 
+class Bounds:
+    def __init__(self, lb=-np.inf, ub=np.inf, **kwargs):
+        if 'keep_feasible' in kwargs:
+            raise ValueError("PRIMA does not support keep_feasible at this time")
+        self.lb = np.atleast_1d(lb)
+        self.ub = np.atleast_1d(ub)
+        try:
+            res = np.broadcast_arrays(self.lb, self.ub)
+            self.lb, self.ub = res
+        except ValueError:
+            raise ValueError("`lb` and `ub` must be broadcastable.")
+
+
 def process_bounds(bounds, x0):
     '''
     bounds can either be an object with the properties lb and ub, or a list of tuples
