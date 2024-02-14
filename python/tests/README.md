@@ -17,10 +17,10 @@ order to run that test by itself.
 - [x] not providing any bounds, linear constraints, or nonlinear constraints and selecting NEWUOA calls NEWUOA and provides the optimal unbounded/unconstrained solution - test_basic_functionality.py::test_not_providing_bounds_linear_constraints_or_nonlinear_constraints_and_select_NEWUOA
 - [x] not providing any bounds, linear constraints, or nonlinear constraints and selecting UOBYQA calls UOBYQA and provides the optimal unbounded/unconstrained solution - test_basic_functionality.py::test_not_providing_bounds_linear_constraints_or_nonlinear_constraints_and_select_UOBYQA
 ## Requirements for combining constraints and bounds
-- [ ] providing linear and nonlinear constraints together calls COBYLA and the constraints are successfully applied
-- [ ] providing bounds and linear constraints together calls LINCOA and the constraints/bounds are successfully applied
-- [ ] providing bounds and nonlinear constraints together calls COBYLA and the constraints/bounds are successfully applied
-- [ ] provoding bounds and linear and nonlinear constraints together calls COBYLA and the constraints/bounds are successfully applied
+- [x] providing linear and nonlinear constraints together calls COBYLA and the constraints are successfully applied - test_combining_constraints.py::test_providing_linear_and_nonlinear_constraints
+- [x] providing bounds and linear constraints together calls LINCOA and the constraints/bounds are successfully applied - test_combining_constraints.py::test_providing_bounds_and_linear_constraints
+- [x] providing bounds and nonlinear constraints together calls COBYLA and the constraints/bounds are successfully applied - test_combining_constraints.py::test_providing_bounds_and_nonlinear_constraints
+- [x] provoding bounds and linear and nonlinear constraints together calls COBYLA and the constraints/bounds are successfully applied - test_combining_constraints.py::test_providing_bounds_and_linear_and_nonlinear_constraints
 ## Requirements for data types
 - [x] providing a nonlinear constraint function returning a numpy array works without warnings or errors - test_data_types.py::test_constraint_function_returns_numpy_array
 - [x] providing a nonlinear constraint function returning a Python list works without warnings or errors - test_data_types.py::test_constraint_function_returns_list

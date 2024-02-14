@@ -10,11 +10,12 @@ class LinearConstraint:
     self.ub = ub
     # A must be a scalar, a list, or a numpy array
     # If it's a list, we assume that it's basically a 1-row matrix
+    # If it's a numpy array with only 1 dimension we force it to be a 1-row matrix
     if isinstance(self.A, int) or isinstance(self.A, float):
       self.A = np.array([[self.A]])
-    elif isinstance(self.A, list):
-      self.A = np.array([self.A])
-    elif not isinstance(self.A, np.ndarray):
+    elif isinstance(self.A, list) or isinstance(self.A, np.ndarray):
+      self.A = np.atleast_2d(self.A)
+    else:
       raise("A must be a scalar, list, or numpy array")
     
     num_constraints = self.A.shape[0]

@@ -90,7 +90,7 @@ def minimize(fun, x0, args=(), method=None, bounds=None, constraints=None, callb
     # 2. PRIMA has both A_eq and A_ineq (and b_eq and b_ineq)
     # As such, we must:
     # 1. Convert lb <= A <= ub to A <= b
-    # 2. Split A <= b into A_eq and A_ineq
+    # 2. Split A <= b into A_eq == b_eq and A_ineq <= b_ineq
     # Fortunately we can do both at the same time
     A_eq = []
     b_eq = []
