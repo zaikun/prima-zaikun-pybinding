@@ -96,6 +96,13 @@ PYBIND11_MODULE(_prima, m) {
       .def_readwrite("nlconstr", &PRIMAResult::nlconstr)
       .def("__repr__", &PRIMAResult::repr);
 
+    py::enum_<prima_message_t>(m, "PRIMAMessage")
+      .value("NONE", PRIMA_MSG_NONE)
+      .value("EXIT", PRIMA_MSG_EXIT)
+      .value("RHO", PRIMA_MSG_RHO)
+      .value("FEVL", PRIMA_MSG_FEVL)
+      .export_values();
+
 
     m.def("minimize", [](const py::function& python_objective_function,
                       py::array_t<double, py::array::c_style>& py_x0,

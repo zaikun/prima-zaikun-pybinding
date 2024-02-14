@@ -1,4 +1,4 @@
-from ._prima import minimize as _minimize, __version__
+from ._prima import minimize as _minimize, __version__, PRIMAMessage
 from ._nonlinear_constraints import NonlinearConstraint, process_single_nl_constraint, process_multiple_nl_constraints
 from ._linear_constraints import LinearConstraint, process_single_linear_constraint, process_multiple_linear_constraints
 from ._bounds import process_bounds

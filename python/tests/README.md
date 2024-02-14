@@ -30,16 +30,18 @@ order to run that test by itself.
 - [x] providing x0 as scalar works without warnings or errors - test_data_types.py::test_x0_as_scalar
 ## Requirements for various options
 - [ ] various options can be successfully provided
-  - [ ] ftarget
-  - [ ] iprint
-  - [ ] max function evaluations (maxfun/maxfev)
+  - [x] ftarget - test_options.py::test_ftarget
+  - [x] iprint - test_options.py::test_iprint
+  - [x] max function evaluations via maxfun (name used by SciPy) - test_options.py::test_maxfun
+  - [x] max function evaluations via maxfev (name used by PRIMA) - test_options.py::test_maxfev
   - [ ] npt
   - [ ] rhobeg
   - [ ] rhoend
 - [x] an objective function without args can be used sucessfully - test_options.py::test_normal_function
 - [x] an objective function with args can be used successfully - test_options.py::test_function_with_regular_args
 - [x] an objective function with *args can be used successfully - test_options.py::test_function_with_star_args
-- [ ] providing a callback leads to the callback being successfully called
+- [x] providing a callback leads to the callback being successfully called - test_options.py::test_callback
+- [x] providing a callback that returns True leads to early termination - test_options.py::test_callback_early_termination
 - [x] providing anonymous lambda as: objective function, constraint function, callback works without warnings or errors - test_anonymous_lambda.py::test_anonymous_lambda
 
 ## Requirements for compatibility with existing APIs
@@ -53,9 +55,14 @@ order to run that test by itself.
 These tests are for behavior observed during testing that we want to make sure remains fixed.
 - [x] calling with a method that is not available throws an exception and exits cleanly (i.e. no other warnings or error or hanging of the interpreter) (relates to the test regarding anonymous lambda functions) - test_anonymous_lambda.py::test_anonymous_lambda_unclean_exit
 ## Requirements for ordering a lizard
-This tests calling prima with unexpected options and verifying that it behaves reasonably. The name comes from an old joke about a QA engineer:
-    
-    A QA engineer walks into a bar. He orders a beer. He orders 2 beers. He orders 0 beers, -1 beers, he orders a lizard. Satisfied that the bartender is performing his job adequately, he is about to sign off on the release when a customers walks in and asks where the bathroom is. The whole bar erupts in flames.
+This tests calling PRIMA with unexpected options and verifying that it behaves reasonably. The name comes from an old joke about a QA engineer:
+
+    A QA engineer walks into a bar.
+    He orders a beer.
+    He orders 2 beers.
+    He orders 0 beers, -1 beers, he orders a lizard.
+    Satisfied that the bartender is performing his job adequately, he prepares to sign off on the release.
+    A customers walks in and asks where the bathroom is. The whole bar erupts in flames.
 
 - [ ] Calling COBYLA without nonlinear constraints results in a warning informing the user they may have selected an inappropriate algorithm
 - [ ] Calling LINCOA without linear or nonlinear constraints results in a warning informing the user they may have selected an inappropriate algorithm
