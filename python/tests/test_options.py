@@ -40,7 +40,6 @@ def test_callback():
     def callback(x, f, nf, tr, cstrv, nlconstr):
         nonlocal callback_called  # this makes sure we reference the variable in the parent scope
         callback_called = True
-        print(f"best points so far: x={x} f={f} cstrv={cstrv} nlconstr={nlconstr} nf={nf} tr={tr}")
     res = minimize(fun, x0, method="COBYLA", constraints=nlc, callback=callback)
     assert callback_called
     assert fun.result_point_and_value_are_optimal(res)
@@ -49,7 +48,6 @@ def test_callback():
 def test_callback_early_termination():
     x0 = [0.0] * 2
     def callback(x, *args):
-        print(x)
         if x[0] > 1:
             return True
     res = minimize(fun, x0, callback=callback)
@@ -61,6 +59,8 @@ def test_ftarget():
     x0 = [0.0] * 2
     options = {'ftarget': 20}
     res = minimize(fun, x0, options=options)
+    # Assert that the results are not optimal since we're stopping
+    # at ftarget=20 instead of the natural minimum of 0.
     assert not fun.result_point_and_value_are_optimal(res)
 
 
@@ -91,3 +91,31 @@ def test_maxfev():
     options = {'maxfev': 10}
     res = minimize(fun, x0, options=options)
     assert res.nfev == 10
+
+
+def test_npt():
+    x0 = [0.0] * 2
+    options = {'npt': 4}
+    res_with_npt = minimize(fun, x0, options=options)
+    res_without_npt = minimize(fun, x0)
+    assert res_with_npt.nfev != res_without_npt.nfev
+
+
+def test_rhobeg():
+    x0 = [0.0] * 2
+    options = {'rhobeg': 1e-3}
+    res_with_rhobeg = minimize(fun, x0, options=options)
+    res_without_rhobeg = minimize(fun, x0)
+    # With a smaller rhobeg, we're taking smaller steps at first
+    # and so we should converge more slowly
+    assert res_with_rhobeg.nfev > res_without_rhobeg.nfev
+
+
+def test_rhoend():
+    x0 = [0.0] * 2
+    options = {'rhoend': 1e-2}
+    res_with_rhoend = minimize(fun, x0, options=options)
+    res_without_rhoend = minimize(fun, x0)
+    # With a smaller rhoend we have a larger tolerance for the final
+    # trust region radius, and so we should converge more quickly
+    assert res_with_rhoend.nfev < res_without_rhoend.nfev

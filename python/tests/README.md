@@ -29,14 +29,14 @@ order to run that test by itself.
 - [x] providing x0 as Python list works without warnings or errors - test_data_types.py::test_x0_as_array
 - [x] providing x0 as scalar works without warnings or errors - test_data_types.py::test_x0_as_scalar
 ## Requirements for various options
-- [ ] various options can be successfully provided
+- [x] various options can be successfully provided
   - [x] ftarget - test_options.py::test_ftarget
   - [x] iprint - test_options.py::test_iprint
   - [x] max function evaluations via maxfun (name used by SciPy) - test_options.py::test_maxfun
   - [x] max function evaluations via maxfev (name used by PRIMA) - test_options.py::test_maxfev
-  - [ ] npt
-  - [ ] rhobeg
-  - [ ] rhoend
+  - [x] npt - test_options.py::test_npt
+  - [x] rhobeg - test_options.py::test_rhobeg
+  - [x] rhoend - test_options.py::test_rhoend
 - [x] an objective function without args can be used sucessfully - test_options.py::test_normal_function
 - [x] an objective function with args can be used successfully - test_options.py::test_function_with_regular_args
 - [x] an objective function with *args can be used successfully - test_options.py::test_function_with_star_args
