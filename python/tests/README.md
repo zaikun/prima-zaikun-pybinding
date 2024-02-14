@@ -42,7 +42,7 @@ order to run that test by itself.
 - [x] an objective function with *args can be used successfully - test_options.py::test_function_with_star_args
 - [x] providing a callback leads to the callback being successfully called - test_options.py::test_callback
 - [x] providing a callback that returns True leads to early termination - test_options.py::test_callback_early_termination
-- [x] providing anonymous lambda as: objective function, constraint function, callback works without warnings or errors - test_anonymous_lambda.py::test_anonymous_lambda
+
 
 ## Requirements for compatibility with existing APIs
 - [x] compatible with scipy.optimize.minimize API - test_compatibility_scipy.py::test_scipy
@@ -53,6 +53,7 @@ order to run that test by itself.
 - [ ] providing a list of linear constraints leads to them being successfully combined and applied
 ## Requirements for regression tests
 These tests are for behavior observed during testing that we want to make sure remains fixed.
+- [x] providing anonymous lambda as: objective function, constraint function, callback works without warnings or errors - test_anonymous_lambda.py::test_anonymous_lambda
 - [x] calling with a method that is not available throws an exception and exits cleanly (i.e. no other warnings or error or hanging of the interpreter) (relates to the test regarding anonymous lambda functions) - test_anonymous_lambda.py::test_anonymous_lambda_unclean_exit
 ## Requirements for ordering a lizard
 This tests calling PRIMA with unexpected options and verifying that it behaves reasonably. The name comes from an old joke about a QA engineer:

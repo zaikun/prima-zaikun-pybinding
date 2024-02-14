@@ -1,9 +1,9 @@
 # On some platforms in CI we are not able to install scipy, and in that
 # case we should skip this test. Note that pdfo depends on scipy.
 import pytest
-scipy = pytest.importorskip("scipy")
-
+from packaging import version
 from test_combining_constraints import test_providing_bounds_and_linear_and_nonlinear_constraints
+
 
 def test_prima(capfd):
     from prima import minimize, NonlinearConstraint as NLC, LinearConstraint as LC, Bounds
@@ -14,6 +14,13 @@ def test_prima(capfd):
 # function itself calls the cobyla function. For now we suppress this warning.
 @pytest.mark.filterwarnings("ignore:The `cobyla` function is deprecated. Use the `pdfo` function")
 def test_pdfo():
+    pdfo = pytest.importorskip("pdfo")
+    if version.parse(pdfo.__version__) < version.parse("2.0.0"):
+        pytest.skip("pdfo version too old for this test (it does not accept radius_init and radius_final as options)")
+    scipy = pytest.importorskip("scipy")
+    if version.parse(scipy.__version__) < version.parse("1.11.0"):
+        pytest.skip("scipy version too old for this test (its version of COBYLA does not accept bounds)")
+
     from pdfo import pdfo
     from scipy.optimize import NonlinearConstraint as NLC, LinearConstraint as LC, Bounds
     test_providing_bounds_and_linear_and_nonlinear_constraints(None, pdfo, NLC, LC, Bounds, package='pdfo')
