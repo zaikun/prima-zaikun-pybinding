@@ -44,25 +44,30 @@ def test_providing_bounds_and_nonlinear_constraints(capfd):
 
 # This test is re-used for the compatibility tests, hence the extra arguments and their
 # default values
-def test_providing_bounds_and_linear_and_nonlinear_constraints(capfd, minimize=prima_minimize, NLC=prima_NLC, LC=prima_LC, Bounds=prima_Bounds):
+def test_providing_bounds_and_linear_and_nonlinear_constraints(capfd, minimize=prima_minimize, NLC=prima_NLC, LC=prima_LC, Bounds=prima_Bounds, method=None):
     # This test needs a 3 variable objective function so that we can check that the
     # bounds and constraints are all active
     def newfun(x):
         return fun(x[0:2]) + (x[2] - 3)**2
     nlc = NLC(lambda x: x[0]**2, lb=[25], ub=[100])
-    bounds = Bounds([None, 1], [None, 1])
+    bounds = Bounds([-np.inf, 1, -np.inf], [np.inf, 1, np.inf])
     lc = LC(np.array([1,1,1]), lb=10, ub=15)
     x0 = [0, 0, 0]
     # macOS seems to stop just short of the optimal solution, so we help it along by
     # taking a larger initial trust region readius and requiring a smaller final radius
     # before stopping
-    options = {'rhobeg': 2, 'rhoend': 1e-8}
-    res = minimize(newfun, x0, constraints=[nlc, lc], bounds=bounds, options=options)
+    options = {'rhobeg': 0.1, 'rhoend': 1e-8}
+    if minimize != prima_minimize:  # this implies SciPy
+         # 'tol' is equivalent to 'rhoend' in the SciPy implementation of COBYLA
+        options['tol'] = options['rhoend']
+        del options['rhoend']
+    res = minimize(newfun, x0, method=method, constraints=[nlc, lc], bounds=bounds, options=options)
     
     assert np.isclose(res.x[0], 5.5, atol=1e-6, rtol=1e-6)
     assert np.isclose(res.x[1], 1, atol=1e-6, rtol=1e-6)
     assert np.isclose(res.x[2], 3.5, atol=1e-6, rtol=1e-6)
     assert np.isclose(res.fun, 9.5, atol=1e-6, rtol=1e-6)
-    outerr = capfd.readouterr() if capfd is not None else None
-    assert outerr is not None and outerr.out == "Nonlinear constraints detected, applying COBYLA\n"
-    assert outerr is not None and outerr.err == ''
+    if minimize == prima_minimize:
+        outerr = capfd.readouterr()
+        assert outerr.out == "Nonlinear constraints detected, applying COBYLA\n"
+        assert outerr.err == ''

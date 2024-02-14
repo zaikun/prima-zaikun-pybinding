@@ -29,7 +29,11 @@ def process_bounds(bounds, x0):
     if bounds is not None:
         # This if statement will handle an object of type scipy.optimize.Bounds or similar
         if hasattr(bounds, 'lb') and hasattr(bounds, 'ub'):
-            return bounds.lb, bounds.ub
+            lb = np.nan_to_num(np.array(bounds.lb, dtype=np.float64), nan=-np.inf)
+            ub = np.nan_to_num(np.array(bounds.ub, dtype=np.float64), nan=np.inf)
+            lb = np.concatenate((lb, -np.inf*np.ones(len(x0) - len(lb))))
+            ub = np.concatenate((ub, np.inf*np.ones(len(x0) - len(ub))))
+            return lb, ub
         lb = []
         ub = []
         for bound in bounds:
