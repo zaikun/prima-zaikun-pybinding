@@ -20,7 +20,7 @@ order to run that test by itself.
 - [x] providing linear and nonlinear constraints together calls COBYLA and the constraints are successfully applied - test_combining_constraints.py::test_providing_linear_and_nonlinear_constraints
 - [x] providing bounds and linear constraints together calls LINCOA and the constraints/bounds are successfully applied - test_combining_constraints.py::test_providing_bounds_and_linear_constraints
 - [x] providing bounds and nonlinear constraints together calls COBYLA and the constraints/bounds are successfully applied - test_combining_constraints.py::test_providing_bounds_and_nonlinear_constraints
-- [x] provoding bounds and linear and nonlinear constraints together calls COBYLA and the constraints/bounds are successfully applied - test_combining_constraints.py::test_providing_bounds_and_linear_and_nonlinear_constraints
+- [x] providing bounds and linear and nonlinear constraints together calls COBYLA and the constraints/bounds are successfully applied - test_combining_constraints.py::test_providing_bounds_and_linear_and_nonlinear_constraints
 ## Requirements for data types
 - [x] providing a nonlinear constraint function returning a numpy array works without warnings or errors - test_data_types.py::test_constraint_function_returns_numpy_array
 - [x] providing a nonlinear constraint function returning a Python list works without warnings or errors - test_data_types.py::test_constraint_function_returns_list
@@ -28,6 +28,7 @@ order to run that test by itself.
 - [x] providing x0 as numpy array works without warnings or errors - test_data_types.py::test_x0_as_list
 - [x] providing x0 as Python list works without warnings or errors - test_data_types.py::test_x0_as_array
 - [x] providing x0 as scalar works without warnings or errors - test_data_types.py::test_x0_as_scalar
+- [x] providing A as either a scalar, list, or numpy array, providing lb as either a scalar, list, or numpy array, and providing ub as either a scalar, list or numpy array works without warning or errors in all combinations - test_data_types.py::test_linear_constraint_data_types
 ## Requirements for various options
 - [x] various options can be successfully provided
   - [x] ftarget - test_options.py::test_ftarget
