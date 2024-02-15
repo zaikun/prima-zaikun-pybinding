@@ -1,47 +1,39 @@
 import numpy as np
 from prima import NonlinearConstraint, process_multiple_nl_constraints, process_single_nl_constraint
-
-# Need to support:
-# - test multiple constraints provided with all of them having either lb or ub as list
-# - test multiple constraints provided with all of them having either lb or ub as scalar
-# - test multiple constraints provided with some of them having lb or ub as list and some as scalar
+import pytest
 
 
-def test_multiple_nl_constraints_all_provide_lb_ub_as_list():
-    nlc1 = NonlinearConstraint(lambda x: x, lb=[-np.inf], ub=[0])
-    nlc2 = NonlinearConstraint(lambda x: [x, x], lb=[-np.inf]*2, ub=[0]*2)
+
+@pytest.mark.parametrize("lb1", (-np.inf, [-np.inf], np.array([-np.inf])))
+@pytest.mark.parametrize("lb2", (-np.inf, [-np.inf]*2, np.array([-np.inf]*2)))
+@pytest.mark.parametrize("ub1", (0, [0], np.array([0])))
+@pytest.mark.parametrize("ub2", (0, [0]*2, np.array([0]*2)))
+def test_multiple_nl_constraints_various_data_types(lb1, ub1, lb2, ub2):
+    nlc1 = NonlinearConstraint(lambda x: x, lb=lb1, ub=ub1)
+    nlc2 = NonlinearConstraint(lambda x: [x, x], lb=lb2, ub=ub2)
     nlcs = [nlc1, nlc2]
     x0 = 0
-    nlc = process_multiple_nl_constraints(x0, nlcs, None)  # We can provide options as None since this shouldn't trigger the code path that requires it
-    assert all(nlc.lb == [-np.inf, -np.inf, -np.inf])
-    assert all(nlc.ub == [0, 0, 0])
-    assert all(nlc.fun(0) == [0, 0, 0])
-
-
-def test_multiple_nl_constraints_some_provide_lb_ub_as_list():
-    nlc1 = NonlinearConstraint(lambda x: x, lb=[-np.inf], ub=[0])
-    nlc2 = NonlinearConstraint(lambda x: [x, x], lb=-np.inf, ub=0)
-    nlcs = [nlc1, nlc2]
     options = {}
-    x0 = 0
-    nlc = process_multiple_nl_constraints(x0, nlcs, options) 
+    nlc = process_multiple_nl_constraints(x0, nlcs, options)
     assert all(nlc.lb == [-np.inf, -np.inf, -np.inf])
     assert all(nlc.ub == [0, 0, 0])
     assert all(nlc.fun(0) == [0, 0, 0])
-    assert options['nlconstr0'] == [0, 0, 0]
-
-
-def test_multiple_nl_constraints_none_provide_lb_ub_as_list():
-    nlc1 = NonlinearConstraint(lambda x: x, lb=-np.inf, ub=0)
-    nlc2 = NonlinearConstraint(lambda x: [x, x], lb=-np.inf, ub=0)
-    nlcs = [nlc1, nlc2]
-    options = {}
-    x0 = 0
-    nlc = process_multiple_nl_constraints(x0, nlcs, options) 
-    assert all(nlc.lb == [-np.inf, -np.inf, -np.inf])
-    assert all(nlc.ub == [0, 0, 0])
-    assert all(nlc.fun(0) == [0, 0, 0])
-    assert options['nlconstr0'] == [0, 0, 0]
+    # The proccess_multiple_nl_constraints function will only evaluate the constraint function
+    # if it cannot determine the number of constraints from the provided options
+    # Only if all of the following fail will the constraint function be evaluated:
+    num_constraints = 0
+    try: num_constraints = len(lb1) + len(lb2)
+    except TypeError: pass
+    try: num_constraints = len(lb1) + len(ub2)
+    except TypeError: pass
+    try: num_constraints = len(ub1) + len(lb2)
+    except TypeError: pass
+    try: num_constraints = len(ub1) + len(ub2)
+    except TypeError: pass
+    if num_constraints > 0:
+        assert 'nlconstr0' not in options.keys()
+    else:
+        assert options['nlconstr0'] == [0, 0, 0]
 
 
 def test_single_nl_constraint_provides_lb_as_list():

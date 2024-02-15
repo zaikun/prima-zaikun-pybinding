@@ -49,7 +49,7 @@ order to run that test by itself.
 - [x] compatible with scipy.optimize.minimize API - test_compatibility_scipy.py::test_scipy
 - [x] compatible with PDFO API - test_compatibility_pdfo.py::test_pdfo
 ## Requirements for processing of lists of constraints
-- [ ] providing a list of nonlinear constraint functions without providing either the total dimension or the dimension of each function successfully determines the total number of contraints
+- [x] providing a list of nonlinear constraint functions without providing either the total dimension or the dimension of each function successfully determines the total number of contraints - test_process_nonlinear_constraints.py::test_multiple_nl_constraints_various_data_types
 - [ ] providing a list mixing linear and nonlinear constraints leads to successfully setting the appropraite constraints and their successful application
 - [ ] providing a list of linear constraints leads to them being successfully combined and applied
 ## Requirements for regression tests
