@@ -1,6 +1,8 @@
 from prima import minimize, NonlinearConstraint as NLC, PRIMAMessage
 from objective import fun
 import numpy as np
+import pytest
+from sys import platform
 
 
 def fun_with_star_args(x, *args):
@@ -64,6 +66,7 @@ def test_ftarget():
     assert not fun.result_point_and_value_are_optimal(res)
 
 
+@pytest.mark.skipif(platform == "win32", reason="Windows outputs some strange characters, probably \\r\\n")
 def test_iprint(capfd):
     x0 = [0.0] * 2
     options = {'iprint': PRIMAMessage.EXIT}
