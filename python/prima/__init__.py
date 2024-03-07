@@ -1,3 +1,5 @@
+# FIXME: Use 4 spaces for indentation instead of 2. 
+
 from ._prima import minimize as _minimize, __version__, PRIMAMessage
 from ._nonlinear_constraints import NonlinearConstraint, process_nl_constraints
 from ._linear_constraints import LinearConstraint, process_single_linear_constraint, process_multiple_linear_constraints, separate_LC_into_eq_and_ineq
@@ -109,7 +111,8 @@ def minimize(fun, x0, args=(), method=None, bounds=None, constraints=None, callb
   lb, ub = process_bounds(bounds, lenx0)
 
   if linear_constraint is not None:
-    # this function doesn't take nonlinear constraints into account at this time
+    # FIXME: _project should be applied only if the problem has bounds or linear constraints but
+    # no nonlinear constraints. Therefore, ", 'nonlinear': None" is superfluous. 
     x0 = _project(x0, lb, ub, {'linear': linear_constraint, 'nonlinear': None})
     A_eq, b_eq, A_ineq, b_ineq = separate_LC_into_eq_and_ineq(linear_constraint)
   else:
@@ -119,18 +122,32 @@ def minimize(fun, x0, args=(), method=None, bounds=None, constraints=None, callb
     b_ineq = None
 
   if nonlinear_constraint is not None:
-    # PRIMA prefers -inf < f(x) <= 0, so we need to modify the nonlinear constraint accordingly
+    # FIXME: Do the following conversion in _nonlinear_constraints.py. Otherwise, it is 
+    # inconsistent with the conversion of the linear constraints.  
+    
+    # The Python interface receives nonlinear constraints lb <= constraint(x) <= ub, but the Fortran 
+    # backend of PRIMA expects that the linear constraints are specified as constr(x) <= 0.  
+    # We need to define the constraint function accordingly.
 
     def constraint_function(x):
       values = np.array(nonlinear_constraint.fun(x), dtype=np.float64)
+      return np.concatenate(([vi - ub_i for ub_i, vi in zip(nonlinear_constraint.ub, values) if ub_i < np.inf], [lb_i - vi for lb_i, vi in zip(nonlinear_constraint.lb, values) if lb_i > -np.inf]))
 
-      return np.concatenate((values - nonlinear_constraint.ub, [lb_i - vi for lb_i, vi in zip(nonlinear_constraint.lb, values) if lb_i != -np.inf]))
     if options is None:
       options = {}
-    options['m_nlcon'] = len(nonlinear_constraint.lb) + len([lb_i for lb_i in nonlinear_constraint.lb if lb_i != -np.inf])
+    # FIXME: 
+    # 1. The concept is wrong here. 'm_nlcon', 'nlconstr0', and 'f0' are not options. 
+    # They are part of the problem. 
+    # 2. 'm_nlcon', 'nlconstr0', and 'f0' should only be defined for COBYLA, not for others. 
+    # 3. Due to 2, 'm_nlcon', 'nlconstr0', and 'f0' should not be here but by a lower-level function that 
+    # invokes COBYLA; for example, see 
+    # https://github.com/pdfo/pdfo/blob/c76066dba48dc44abf55c4bbb69575391daef316/python/pdfo/_cobyla.py#L340-L341
+    options['m_nlcon'] = len([ub_i for ub_i in nonlinear_constraint.ub if ub_i < np.inf]) + len([lb_i for lb_i in nonlinear_constraint.lb if lb_i > -np.inf])
     options['nlconstr0'] = constraint_function(x0)
     options['nlconstr0'] = np.array(options['nlconstr0'], dtype=np.float64)
-    if 'f0' not in options: options['f0'] = fun(x0)
+    options['f0'] = fun(x0)  
+    # FIXME: The following is wrong. f0 should never be an option. 
+    # if 'f0' not in options: options['f0'] = fun(x0)
   else:
     constraint_function = None
 
