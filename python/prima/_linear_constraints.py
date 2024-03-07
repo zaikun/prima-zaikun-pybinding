@@ -1,3 +1,4 @@
+# FIXME: Use 4 spaces for indentation instead of 2. 
 import numpy as np
 
 
@@ -9,7 +10,7 @@ class LinearConstraint:
     self.lb = lb
     self.ub = ub
     # A must be a scalar, a list, or a numpy array
-    # If it's a list, we assume that it's basically a 1-row matrix
+    # If it's a list, we assume that it's a 1-row matrix
     # If it's a numpy array with only 1 dimension we force it to be a 1-row matrix
     if isinstance(self.A, int) or isinstance(self.A, float):
       self.A = np.array([[self.A]])
@@ -20,7 +21,7 @@ class LinearConstraint:
     
     num_constraints = self.A.shape[0]
 
-    # bounds must be a scalar or a 1D list/array of length equal to number of rows of A
+    # Bounds must be a scalar or a 1D list/array of length equal to the number of rows of A
     def process_bound(bound, name):
       if isinstance(bound, int) or isinstance(bound, float):
         bound = np.array([bound]*num_constraints)
@@ -45,7 +46,8 @@ def process_single_linear_constraint(constraint):
   if len_lb != num_constraints and len_lb == 1:
     constraint.lb = [constraint.lb[0]]*num_constraints
   elif len_lb != num_constraints:
-    raise ValueError('Length of lb must match number of rows in A')
+    raise ValueError('Length of lb must match the number of rows in A')
+      
   # Now ub
   try:
     len_ub = len(constraint.ub)
@@ -55,7 +57,7 @@ def process_single_linear_constraint(constraint):
   if len_ub != num_constraints and len_ub == 1:
     constraint.ub = [constraint.ub[0]]*num_constraints
   elif len_ub != num_constraints:
-    raise ValueError('Length of ub must match number of rows in A')
+    raise ValueError('Length of ub must match the number of rows in A')
   return constraint
 
 
@@ -65,6 +67,7 @@ def process_multiple_linear_constraints(constraints):
   full_A = constraint.A
   full_lb = constraint.lb
   full_ub = constraint.ub
+  # FIXME: Avoid the loop if possible. 
   for constraint in constraints[1:]:
     constraint = process_single_linear_constraint(constraint)
     full_A = np.concatenate((full_A, constraint.A), axis=0)
@@ -74,31 +77,47 @@ def process_multiple_linear_constraints(constraints):
 
 
 def separate_LC_into_eq_and_ineq(linear_constraint):
-  # Two things:
-    # 1. PRIMA prefers A <= b as opposed to lb <= A <= ub
-    # 2. PRIMA has both A_eq and A_ineq (and b_eq and b_ineq)
-    # As such, we must:
-    # 1. Convert lb <= A <= ub to A <= b
-    # 2. Split A <= b into A_eq == b_eq and A_ineq <= b_ineq
-    # Fortunately we can do both at the same time
-    A_eq = []
-    b_eq = []
-    A_ineq = []
-    b_ineq = []
-    for i in range(len(linear_constraint.lb)):
-      if linear_constraint.lb[i] == linear_constraint.ub[i]:
-        A_eq.append(linear_constraint.A[i])
-        b_eq.append(linear_constraint.lb[i])
-      else:
+  # The Python interface receives linear constraints lb <= A*x <= ub, but the 
+  # Fortran backend of PRIMA expects that the linear constraints are specified
+  # as A_eq*x = b_eq, A_ineq*x <= b_ineq. 
+  # As such, we must:
+  # 1. for constraints with lb == ub, rewrite them as A_eq*x = lb;
+  # 2. for constraints with lb < ub, rewrite them as A_ineq*x <= b_ineq.
+    
+  # FIXME: If one of the following cases happens, the problem is infeasible and 
+  # PRIMA should return with x = x0, setting everything else accordingly. 
+  # 1. lb or ub contains NaN;
+  # 2. lb == ub == +/-Inf;
+  # 3. lb > ub.
+    
+  # We suppose lb == ub if ub <= lb + 2*epsilon, assuming that the preprocessing
+  # ensures lb <= ub. 
+  epsilon = np.finfo(np.float64).eps  
+  
+  A_eq = []
+  b_eq = []
+  A_ineq = []
+  b_ineq = []
+
+  # FIXME: use logical indexing instead of a loop.
+  for i in range(len(linear_constraint.lb)):
+    if linear_constraint.ub[i] <= linear_constraint.lb[i] + 2*epsilon:
+      A_eq.append(linear_constraint.A[i])
+      b_eq.append((linear_constraint.lb[i] + linear_constraint.ub[i])/2)
+    else:
+      # Append the upper bounds
+      if linear_constraint.ub[i] < np.inf:
         A_ineq.append(linear_constraint.A[i])
         b_ineq.append(linear_constraint.ub[i])
-        # Flip the lb to to take format preferred by PRIMA, as long as it's not -inf
-        if linear_constraint.lb[i] != -np.inf:
-          A_ineq.append( - linear_constraint.A[i])
-          b_ineq.append( - linear_constraint.lb[i])
-    # Convert to numpy arrays, or set to None if empty
-    A_eq = np.array(A_eq, dtype=np.float64) if len(A_eq) > 0 else None
-    b_eq = np.array(b_eq, dtype=np.float64) if len(b_eq) > 0 else None
-    A_ineq = np.array(A_ineq, dtype=np.float64) if len(A_ineq) > 0 else None
-    b_ineq = np.array(b_ineq, dtype=np.float64) if len(b_ineq) > 0 else None
-    return A_eq, b_eq, A_ineq, b_ineq
+      # Flip and append the lower bounds
+      if linear_constraint.lb[i] > -np.inf:
+        A_ineq.append( - linear_constraint.A[i])
+        b_ineq.append( - linear_constraint.lb[i])
+  
+  # Convert to numpy arrays, or set to None if empty
+  A_eq = np.array(A_eq, dtype=np.float64) if len(A_eq) > 0 else None
+  b_eq = np.array(b_eq, dtype=np.float64) if len(b_eq) > 0 else None
+  A_ineq = np.array(A_ineq, dtype=np.float64) if len(A_ineq) > 0 else None
+  b_ineq = np.array(b_ineq, dtype=np.float64) if len(b_ineq) > 0 else None
+  return A_eq, b_eq, A_ineq, b_ineq
+  
