@@ -127,6 +127,8 @@ def _project(x0, lb, ub, constraints, options=None):
 
     if constraints['linear'] is not None:
         try:
+            # FIXME: The following comment is WRONG in terms of SLSQP. The problem being solved
+            # here is a QP (quadratic programming), for which SLSQP is the wrong algorithm to use. Remove it. 
             # TODO: Ideally we'd like to not depend on scipy in the prima package, so in the future we might want to bring in
             # SLSQP ourselves
             # Project the initial guess onto the linear constraints via SciPy.
