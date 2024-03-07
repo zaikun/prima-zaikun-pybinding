@@ -1,3 +1,7 @@
+# FIXME: The Python interfaces receives the constraints as lb <= constraint(x) <= ub, 
+# but the Fortran backend expects the nonlinear constraints to be constr(x) <= 0.
+# Thus a conversion is needed. It should be done in this file, to be consistent with
+# _linear_constraints.py. 
 import numpy as np
 
 from warnings import warn  # TODO: Need to determine the text of the warning and actually warn about it
