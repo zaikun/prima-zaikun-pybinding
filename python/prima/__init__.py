@@ -139,9 +139,15 @@ def minimize(fun, x0, args=(), method=None, bounds=None, constraints=None, callb
     # 1. The concept is wrong here. 'm_nlcon', 'nlconstr0', and 'f0' are not options. 
     # They are part of the problem. 
     # 2. 'm_nlcon', 'nlconstr0', and 'f0' should only be defined for COBYLA, not for others. 
-    # 3. Due to 2, 'm_nlcon', 'nlconstr0', and 'f0' should not be here but by a lower-level function that 
+    # 3. Due to 2, 'm_nlcon', 'nlconstr0', and 'f0' should not be defined here but by a lower-level function that 
     # invokes COBYLA; for example, see 
     # https://github.com/pdfo/pdfo/blob/c76066dba48dc44abf55c4bbb69575391daef316/python/pdfo/_cobyla.py#L340-L341
+    # 4. In the following line, we should write `len(nonlinear_constraint.ub)` rather than `len(nonlinear_constraint.lb)`,
+    # even though they should be the same. In addition, we should take the possibility of `ub = inf` into account. Last
+    # but not the least, we should write `lb > -inf` rather than `lb != -inf`. The two are different --- the former is 
+    # false but the latter is true if lb is NaN. Anyway, we should avoid using `==` or`!=` on floating-point numbers.
+    # Hence the revised version is as follows.
+    #options['m_nlcon'] = len(nonlinear_constraint.lb) + len([lb_i for lb_i in nonlinear_constraint.lb if lb_i != -np.inf])
     options['m_nlcon'] = len([ub_i for ub_i in nonlinear_constraint.ub if ub_i < np.inf]) + len([lb_i for lb_i in nonlinear_constraint.lb if lb_i > -np.inf])
     options['nlconstr0'] = constraint_function(x0)
     options['nlconstr0'] = np.array(options['nlconstr0'], dtype=np.float64)
