@@ -9,7 +9,7 @@ import numpy as np
 from ._common import _project
 
 
-
+# FIXME: What do the following mean? Are these values arbitrary? PDFO did not need this. 
 class ConstraintType(Enum):
   LINEAR_NATIVE=5
   NONLINEAR_NATIVE=10
@@ -61,7 +61,7 @@ def process_constraints(constraints, x0, options):
   else:
     nonlinear_constraint = None
 
-  # Determine if we have a multiple linear constraints, just 1, or none, and process accordingly
+  # Determine if we have multiple linear constraints, just 1, or none, and process accordingly
   if len(linear_constraints) > 1:
     linear_constraint = process_multiple_linear_constraints(linear_constraints)
   elif len(linear_constraints) == 1:
@@ -81,6 +81,9 @@ def minimize(fun, x0, args=(), method=None, bounds=None, constraints=None, callb
     options.update(temp_options)
 
   if method is None:
+    # FIXME: (can be done latter) 
+    # Define a logical option "quiet" or "verbose" (they mean the opposite; we need only one; PDFO
+    # uses the former) and do the printing only if quiet is false (default true) or verbose is true (default false). 
     if nonlinear_constraint is not None:
       print("Nonlinear constraints detected, applying COBYLA")
       method = "cobyla"
@@ -94,6 +97,7 @@ def minimize(fun, x0, args=(), method=None, bounds=None, constraints=None, callb
       print("No bounds or constraints detected, applying NEWUOA")
       method = "newuoa"
   else:
+    # FIXME: In the future, we should raise a warning rather than error in this case, and select the solver automatically. 
     # Raise some errors if methods were called with inappropriate options
     method = method.lower()
     if method != "cobyla" and nonlinear_constraint is not None:
